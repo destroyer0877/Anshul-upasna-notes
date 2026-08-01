@@ -27,8 +27,9 @@ jobs:
       - name: Make Gradle Wrapper Executable
         run: chmod +x ./gradlew
 
+      # Yahan change kiya hai, clean aur no-build-cache lagaya hai
       - name: Build Debug APK 🏗️
-        run: ./gradlew assembleDebug --no-daemon
+        run: ./gradlew clean assembleDebug --no-daemon --no-build-cache
 
       - name: Upload APK 📦
         uses: actions/upload-artifact@v4
