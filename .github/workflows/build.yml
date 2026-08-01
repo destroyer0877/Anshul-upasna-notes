@@ -27,7 +27,9 @@ jobs:
       - name: Make Gradle Wrapper Executable
         run: chmod +x ./gradlew
 
-      # Yahan change kiya hai, clean aur no-build-cache lagaya hai
+      - name: Generate Debug Keystore 🔑
+        run: keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "C=US, O=Android, CN=Android Debug"
+
       - name: Build Debug APK 🏗️
         run: ./gradlew clean assembleDebug --no-daemon --no-build-cache
 
