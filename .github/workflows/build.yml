@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - main
-  workflow_dispatch: # Tujhe manually button se build karne ka option dega
+  workflow_dispatch:
 
 jobs:
   build:
@@ -19,7 +19,10 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
-          java-version: '17' # Modern Android builds ke liye best
+          java-version: '17'
+
+      - name: Fix Corrupt Gradle Wrapper 🛠️
+        run: gradle wrapper
 
       - name: Make Gradle Wrapper Executable
         run: chmod +x ./gradlew
