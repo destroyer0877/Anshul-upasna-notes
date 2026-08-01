@@ -1,0 +1,6 @@
+{
+  "name": "AU NOTES",
+  "description": "An premium, feature-packed iOS glassmorphic style Notepad with auto sorting categories, locked API keys, real-time AI suggestions, syntax highlighter, OCR image texts, fancy font generator and documents exporter.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

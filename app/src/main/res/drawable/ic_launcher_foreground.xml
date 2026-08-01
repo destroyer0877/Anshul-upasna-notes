@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Outer Leather Notebook boundary container (with premium subtle silver gradient stroke) -->
+    <path
+        android:pathData="M 30,22 H 78 A 6,6 0 0 1 84,28 V 80 A 6,6 0 0 1 78,86 H 30 A 6,6 0 0 1 24,80 V 28 A 6,6 0 0 1 30,22 Z"
+        android:strokeWidth="1.8"
+        android:strokeColor="#CCCCCC">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="24"
+                android:startY="22"
+                android:endX="84"
+                android:endY="86"
+                android:type="linear">
+                <item android:offset="0.0" android:color="#282828"/>
+                <item android:offset="0.5" android:color="#1A1A1A"/>
+                <item android:offset="1.0" android:color="#121212"/>
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Top Right Fold / Curl Accent representing a genuine notebook pad item -->
+    <path
+        android:pathData="M 74,22 L 84,32 H 76 a 2,2 0 0 1 -2,-2 V 22 Z"
+        android:fillColor="#E1E1E1" />
+
+    <!-- Silver Steel Spine rings on the Left bound -->
+    <!-- Ring 1 -->
+    <path
+        android:pathData="M 19,30 h 8 c 0.8,0 1.5,0.8 1.5,1.5 s -0.7,1.5 -1.5,1.5 h -8 c -0.8,0 -1.5,-0.8 -1.5,-1.5 s 0.7,-1.5 1.5,-1.5 z"
+        android:fillColor="#D8D8D8" />
+    <!-- Ring 2 -->
+    <path
+        android:pathData="M 19,41 h 8 c 0.8,0 1.5,0.8 1.5,1.5 s -0.7,1.5 -1.5,1.5 h -8 c -0.8,0 -1.5,-0.8 -1.5,-1.5 s 0.7,-1.5 1.5,-1.5 z"
+        android:fillColor="#ECECEC" />
+    <!-- Ring 3 -->
+    <path
+        android:pathData="M 19,52 h 8 c 0.8,0 1.5,0.8 1.5,1.5 s -0.7,1.5 -1.5,1.5 h -8 c -0.8,0 -1.5,-0.8 -1.5,-1.5 s 0.7,-1.5 1.5,-1.5 z"
+        android:fillColor="#D8D8D8" />
+    <!-- Ring 4 -->
+    <path
+        android:pathData="M 19,63 h 8 c 0.8,0 1.5,0.8 1.5,1.5 s -0.7,1.5 -1.5,1.5 h -8 c -0.8,0 -1.5,-0.8 -1.5,-1.5 s 0.7,-1.5 1.5,-1.5 z"
+        android:fillColor="#ECECEC" />
+    <!-- Ring 5 -->
+    <path
+        android:pathData="M 19,74 h 8 c 0.8,0 1.5,0.8 1.5,1.5 s -0.7,1.5 -1.5,1.5 h -8 c -0.8,0 -1.5,-0.8 -1.5,-1.5 s 0.7,-1.5 1.5,-1.5 z"
+        android:fillColor="#D8D8D8" />
+
+    <!-- Highly polished "A" metallic symbol path -->
+    <path
+        android:pathData="M 35,68 L 47,38 L 59,68"
+        android:strokeWidth="4"
+        android:strokeColor="#FFFFFF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="#00000000" />
+    <path
+        android:pathData="M 40,58 H 54"
+        android:strokeWidth="3.5"
+        android:strokeColor="#FFFFFF"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000" />
+
+    <!-- Highly polished "U" metallic symbol path -->
+    <path
+        android:pathData="M 64,38 V 58 C 64,64 76,64 76,58 V 38"
+        android:strokeWidth="4"
+        android:strokeColor="#FFFFFF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="#00000000" />
+</vector>
