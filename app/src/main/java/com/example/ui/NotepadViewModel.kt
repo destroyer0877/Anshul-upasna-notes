@@ -115,6 +115,9 @@ class NotepadViewModel(application: Application) : AndroidViewModel(application)
                     repo.saveFolder(FolderEntity(name = "Personal Notes", colorHex = "#FF5E7E", iconType = "CUSTOM"))
                 }
             }
+            // 15 days in milliseconds
+            val threshold = System.currentTimeMillis() - (15L * 24 * 60 * 60 * 1000)
+            repo.deleteOldTrashNotes(threshold)
         }
     }
 
@@ -591,16 +594,17 @@ class NotepadViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch(Dispatchers.IO) {
             val key = getActiveApiKey()
             val presets = com.example.util.NameStylizer.getStylishFonts(name)
-            if (key.isBlank() || stylePrompt.isBlank()) {
+            if (key.isBlank()) {
                 withContext(Dispatchers.Main) {
                     onResult(presets)
                 }
                 return@launch
             }
             try {
-                val sysInstruction = "You are an expert typography and stylish name generator. Generate 10 unique, fancy, stylish, creative font and symbol variations of the name '$name' matching user preference '$stylePrompt'. Output ONLY a JSON array of objects with keys 'style' and 'result'. Do not include markdown or backticks."
+                val promptDetails = if (stylePrompt.isBlank()) "Generate a wild, diverse mix of styles (e.g. gothic, cute, hacker, minimalist, emojis, cursive, small caps, bubble)." else stylePrompt
+                val sysInstruction = "You are an expert typography and stylish name generator. Generate 15 unique, highly creative font and symbol variations of the name '$name'. If the user provides a preference, you MUST strictly follow it (e.g. if they say 'small caps', output in small caps). Preference: '$promptDetails'. Output ONLY a JSON array of objects with keys 'style' (short description) and 'result' (the stylized name). Do not include markdown or backticks. Ensure output is just raw JSON."
                 val req = GeminiRequest(
-                    contents = listOf(GeminiContent(parts = listOf(GeminiPart(text = "Name: $name\nPreferences: $stylePrompt")))),
+                    contents = listOf(GeminiContent(parts = listOf(GeminiPart(text = "Name: $name\nPreferences: $promptDetails")))),
                     systemInstruction = GeminiContent(parts = listOf(GeminiPart(text = sysInstruction)))
                 )
                 val response = RetrofitClient.service.generateContent(key, req)
@@ -627,8 +631,9 @@ class NotepadViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+
     // --- Dynamic Dark Mode State ---
-    var isDarkMode by mutableStateOf(sharedPrefs.getBoolean("dark_mode_enabled", false))
+    var isDarkMode by mutableStateOf(sharedPrefs.getBoolean("dark_mode_enabled", true))
         private set
 
     fun toggleDarkMode() {
@@ -659,7 +664,19 @@ class NotepadViewModel(application: Application) : AndroidViewModel(application)
             null
         }
     }
-}
 
+    fun restoreFromTrash(id: Int) {
+        viewModelScope.launch {
+            repo.restoreFromTrash(id)
+        }
+    }
+    
+    fun deleteNotePermanently(note: com.example.data.NoteEntity) {
+        viewModelScope.launch {
+            repo.deleteNote(note)
+        }
+    }
+
+}
 data class ChatMessage(val sender: String, val message: String)
-data class ChatSession(val id: Long, val title: String, val messages: List<ChatMessage>)
+data class ChatSession(val id: Long = System.currentTimeMillis(), val title: String, val messages: List<ChatMessage>)

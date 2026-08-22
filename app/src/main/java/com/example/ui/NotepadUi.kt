@@ -13,6 +13,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.*
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontStyle
@@ -66,8 +68,17 @@ import com.example.util.NotepadExporter
 import com.example.util.SyntaxHighlighter
 import kotlinx.coroutines.launch
 
+val LocalIsDarkMode = androidx.compose.runtime.compositionLocalOf { false }
+
+
 @Composable
 fun NotepadApp(viewModel: NotepadViewModel) {
+    androidx.compose.runtime.CompositionLocalProvider(LocalIsDarkMode provides viewModel.isDarkMode) {
+        NotepadAppContent(viewModel)
+    }
+}
+@Composable
+fun NotepadAppContent(viewModel: NotepadViewModel) {
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
     val scope = rememberCoroutineScope()
@@ -83,6 +94,7 @@ fun NotepadApp(viewModel: NotepadViewModel) {
     
     // Selection and Editor States
     var selectedNote by remember { mutableStateOf<NoteEntity?>(null) }
+    var selectedFilePath by remember { mutableStateOf<String?>(null) }
     var selectedFolderId by remember { mutableStateOf<Int>(-100) } // -100 means All Notes
     var selectedFolderTitle by remember { mutableStateOf("All Notes") }
 
@@ -98,7 +110,7 @@ fun NotepadApp(viewModel: NotepadViewModel) {
     var secretBypassInput by remember { mutableStateOf("") }
 
     // Splash screen state
-    var showSplashScreen by remember { mutableStateOf(true) }
+    var showSplashScreen by remember { mutableStateOf(false) }
 
     // Dialogs
     var isAddFolderDialogOpen by remember { mutableStateOf(false) }
@@ -162,47 +174,20 @@ fun NotepadApp(viewModel: NotepadViewModel) {
         }
     }
 
-    // --- Background Ambient Mesh Gradient for Glassmorphism iOS feel ---
-    val gradientBackground = if (viewModel.isDarkMode) {
-        Brush.verticalGradient(
-            colors = listOf(Color(0xFF0F172A), Color(0xFF020617))
-        )
-    } else {
-        Brush.linearGradient(
-            colors = listOf(
-                Color(0xFFF2F2F7), // iOS System Light Gray
-                Color(0xFFFFFFFF), // Pure white shine
-                Color(0xFFE5E5EA)  // iOS system secondary gray
-            )
-        )
-    }
 
+
+    // --- STANDARD BACKGROUND (Animated Mesh Disabled) ---
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(gradientBackground)
+            .background(if (LocalIsDarkMode.current) Color(0xFF0F172A) else Color(0xFFF8FAFC))
     ) {
-        // Edge elements to emphasize Glassmorphic overlays
-        Box(
-            modifier = Modifier
-                .size(260.dp)
-                .offset(y = (-50).dp, x = (-30).dp)
-                .background(Color(0xFF2563EB).copy(alpha = 0.08f), CircleShape)
-        )
-        Box(
-            modifier = Modifier
-                .size(240.dp)
-                .align(Alignment.BottomEnd)
-                .offset(y = 80.dp, x = 40.dp)
-                .background(Color(0xFFEC4899).copy(alpha = 0.06f), CircleShape)
-        )
-
-        // Backpress handler for natural screen transitions
         BackHandler(enabled = currentScreen != "HOME") {
-            if (isAiPanelOpen) {
-                isAiPanelOpen = false
-            } else {
-                currentScreen = "HOME"
+            if (isAiPanelOpen) isAiPanelOpen = false else currentScreen = "HOME"
+        }
+        Column(modifier = Modifier.fillMaxSize()) {
+            when (currentScreen) {
+
             }
         }
 
@@ -217,14 +202,8 @@ fun NotepadApp(viewModel: NotepadViewModel) {
                     selectedFolderId = selectedFolderId,
                     selectedFolderTitle = selectedFolderTitle,
                     onFolderSelected = { id, title ->
-                        // APIs folder has virtual folder id: -3
-                        if (id == -3 && !unlockedFoldersList.contains(-3)) {
-                            pendingFolderUnlockId = -3
-                            isPinUnlockDialogOpen = true
-                        } else {
-                            selectedFolderId = id
-                            selectedFolderTitle = title
-                        }
+                        selectedFolderId = id
+                        selectedFolderTitle = title
                     },
                     onAddFolderClick = { isAddFolderDialogOpen = true },
                     onNoteSelect = { note ->
@@ -261,6 +240,15 @@ fun NotepadApp(viewModel: NotepadViewModel) {
                     viewModel = viewModel
                 )
 
+                "FILE_EDITOR" -> {
+                    selectedFilePath?.let { path ->
+                        FileEditorScreenSection(
+                            filePath = path,
+                            onBack = { currentScreen = "FILE_EXPLORER" },
+                            viewModel = viewModel
+                        )
+                    }
+                }
                 "EDITOR" -> NoteEditorScreenSection(
                     note = selectedNote,
                     folders = folders,
@@ -292,11 +280,15 @@ fun NotepadApp(viewModel: NotepadViewModel) {
                     onBack = { currentScreen = "HOME" },
                     viewModel = viewModel
                 )
-
-                "FILE_EXPLORER" -> LocalFileExplorerScreenSection(
+                "FILE_EXPLORER" -> LocalFileEditorScreenSection(
                     onBack = { currentScreen = "HOME" },
+                    onOpenFile = { path ->
+                        selectedFilePath = path
+                        currentScreen = "FILE_EDITOR"
+                    },
                     viewModel = viewModel
                 )
+
 
                 "APP_FEATURES" -> AppFeaturesScreenSection(
                     onBack = { currentScreen = "HOME" }
@@ -308,81 +300,80 @@ fun NotepadApp(viewModel: NotepadViewModel) {
             }
         }
 
-        // --- Permanent Sleek Typographic AI Floating Assist Capsule (Aura AI Smart Engine) ---
+        // --- Permanent Sleek AI Floating Assistant Button (Aura AI Smart Engine) ---
         if (currentScreen == "HOME") {
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(bottom = 90.dp, end = 16.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(Color(0xFF0F172A)) // Dark premium slate
-                    .border(1.dp, Color(0xFF475569), RoundedCornerShape(10.dp))
+                    .padding(bottom = 92.dp, end = 18.dp)
+                    .size(56.dp)
+                    .shadow(elevation = 8.dp, shape = CircleShape, spotColor = Color(0x662563EB), ambientColor = Color(0x662563EB))
+                    .clip(CircleShape)
+                    .background(if (LocalIsDarkMode.current) Color(0xFF1E293B) else Color.White)
+                    .border(2.dp, if (LocalIsDarkMode.current) Color(0xFF3B82F6) else Color(0xFF2563EB), CircleShape)
                     .clickable {
                         isAiPanelOpen = !isAiPanelOpen
                         com.example.util.CopySoundPlayer.playClickSound(context)
-                    }
-                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                    },
                 contentAlignment = Alignment.Center
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Text(
-                        text = "✨",
-                        fontSize = 10.sp
-                    )
-                    Text(
-                        text = "AU BOT",
-                        color = Color.White,
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        letterSpacing = 1.2.sp,
-                        fontFamily = FontFamily.Monospace
-                    )
-                }
+                Image(
+                    painter = androidx.compose.ui.res.painterResource(id = com.example.R.drawable.au_chatbot_icon),
+                    contentDescription = "AU Bot",
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(CircleShape)
+                )
             }
         }
 
-        // --- AI Sliding Panel (Seamless overlay layout) ---
+        // --- AI Sliding Panel (Seamless Frosted Royal Blue Layout) ---
         if (isAiPanelOpen) {
             Dialog(onDismissRequest = { isAiPanelOpen = false }) {
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
                         .fillMaxHeight(0.85f)
-                        .padding(horizontal = 8.dp),
-                    shape = RoundedCornerShape(24.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.White),
-                    border = BorderStroke(1.dp, Color(0xFFE2E8F0))
+                        .padding(horizontal = 4.dp),
+                    shape = RoundedCornerShape(28.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (LocalIsDarkMode.current) Color(0xF80B132B) else Color(0xFAF0F7FF)
+                    ),
+                    border = BorderStroke(1.5.dp, if (LocalIsDarkMode.current) Color(0x553B82F6) else Color(0xFFBFDBFE)),
                 ) {
                     Column(modifier = Modifier.fillMaxSize()) {
                         // AI Header
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .background(Color(0xFFF8FAFC))
-                                .padding(16.dp),
+                                .background(if (LocalIsDarkMode.current) Color(0xFF111C44) else Color(0xFFE0EDFF))
+                                .padding(horizontal = 16.dp, vertical = 14.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
+                                Image(
+                                    painter = androidx.compose.ui.res.painterResource(id = com.example.R.drawable.au_chatbot_icon),
+                                    contentDescription = "Chatbot Icon",
+                                    modifier = Modifier.size(28.dp).clip(CircleShape)
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
                                 Text(
                                     text = buildAnnotatedString {
-                                        withStyle(style = SpanStyle(fontWeight = FontWeight.ExtraBold, color = Color(0xFF4F46E5))) {
+                                        withStyle(style = SpanStyle(fontWeight = FontWeight.ExtraBold, color = Color(0xFF2563EB))) {
                                             append("AU ")
                                         }
-                                        withStyle(style = SpanStyle(fontWeight = FontWeight.Light, color = Color(0xFF1E293B))) {
+                                        withStyle(style = SpanStyle(fontWeight = FontWeight.Bold, color = if (LocalIsDarkMode.current) Color.White else Color(0xFF0F172A))) {
                                             append("AI SMART ENGINE")
                                         }
                                     },
-                                    fontSize = 18.sp,
+                                    fontSize = 17.sp,
                                     fontFamily = FontFamily.SansSerif,
-                                    letterSpacing = 1.sp
+                                    letterSpacing = 0.5.sp
                                 )
                             }
                             IconButton(onClick = { isAiPanelOpen = false }) {
-                                Icon(Icons.Default.Close, "Close Panel", tint = Color(0xFF64748B))
+                                Icon(Icons.Default.Close, "Close Panel", tint = if (LocalIsDarkMode.current) Color.White else Color(0xFF1E293B))
                             }
                         }
 
@@ -390,16 +381,16 @@ fun NotepadApp(viewModel: NotepadViewModel) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .background(Color(0xFFF1F5F9))
-                                .padding(horizontal = 14.dp, vertical = 6.dp),
+                                .background(if (LocalIsDarkMode.current) Color(0xFF0F172A) else Color(0xFFEFF6FF))
+                                .padding(horizontal = 14.dp, vertical = 8.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Row(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(12.dp))
-                                    .background(Color(0xFFE2E8F0))
-                                    .padding(2.dp),
+                                    .background(if (LocalIsDarkMode.current) Color(0xFF1E293B) else Color(0xFFDBEAFE))
+                                    .padding(3.dp),
                                 horizontalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
                                 val tabs = listOf(
@@ -411,15 +402,15 @@ fun NotepadApp(viewModel: NotepadViewModel) {
                                     Box(
                                         modifier = Modifier
                                             .clip(RoundedCornerShape(10.dp))
-                                            .background(if (isSelected) Color.White else Color.Transparent)
+                                            .background(if (isSelected) Color(0xFF2563EB) else Color.Transparent)
                                             .clickable { selectedAiTab = tabId }
-                                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                                            .padding(horizontal = 14.dp, vertical = 6.dp)
                                     ) {
                                         Text(
                                             text = label,
                                             fontSize = 11.sp,
                                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                            color = if (isSelected) Color(0xFF1E293B) else Color(0xFF64748B)
+                                            color = if (isSelected) Color.White else (if (LocalIsDarkMode.current) Color(0xFF94A3B8) else Color(0xFF475569))
                                         )
                                     }
                                 }
@@ -428,10 +419,10 @@ fun NotepadApp(viewModel: NotepadViewModel) {
                             // New Chat button to reset
                             Box(
                                 modifier = Modifier
-                                    .clip(RoundedCornerShape(8.dp))
+                                    .clip(RoundedCornerShape(10.dp))
                                     .background(
                                         Brush.linearGradient(
-                                            colors = listOf(Color(0xFF3B82F6), Color(0xFF2563EB))
+                                            colors = listOf(Color(0xFF3B82F6), Color(0xFF1D4ED8))
                                         )
                                     )
                                     .clickable {
@@ -439,14 +430,14 @@ fun NotepadApp(viewModel: NotepadViewModel) {
                                         Toast.makeText(context, "Old chat archived. New chat session started!", Toast.LENGTH_SHORT).show()
                                         selectedAiTab = "CHAT"
                                     }
-                                    .padding(horizontal = 10.dp, vertical = 6.dp)
+                                    .padding(horizontal = 12.dp, vertical = 7.dp)
                             ) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Icon(
                                         imageVector = Icons.Default.Add,
                                         contentDescription = "New Chat",
                                         tint = Color.White,
-                                        modifier = Modifier.size(12.dp)
+                                        modifier = Modifier.size(14.dp)
                                     )
                                     Spacer(modifier = Modifier.width(4.dp))
                                     Text("NEW CHAT", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
@@ -464,7 +455,7 @@ fun NotepadApp(viewModel: NotepadViewModel) {
                                         Icon(
                                             imageVector = Icons.Default.Info,
                                             contentDescription = "No archives",
-                                            tint = Color(0xFF94A3B8),
+                                            tint = Color(0xAAFFFFFF),
                                             modifier = Modifier.size(56.dp)
                                         )
                                         Spacer(modifier = Modifier.height(12.dp))
@@ -472,13 +463,13 @@ fun NotepadApp(viewModel: NotepadViewModel) {
                                             text = "No Saved History",
                                             fontSize = 15.sp,
                                             fontWeight = FontWeight.Bold,
-                                            color = Color(0xFF64748B)
+                                            color = (if (LocalIsDarkMode.current) Color(0xCCFFFFFF) else Color(0xAA000000))
                                         )
                                         Spacer(modifier = Modifier.height(4.dp))
                                         Text(
                                             text = "Tap 'NEW CHAT' in active chat to auto-archive your chats for future reference.",
                                             fontSize = 11.sp,
-                                            color = Color(0xFF94A3B8),
+                                            color = Color(0xAAFFFFFF),
                                             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                                             modifier = Modifier.padding(horizontal = 24.dp)
                                         )
@@ -490,7 +481,7 @@ fun NotepadApp(viewModel: NotepadViewModel) {
                                         .weight(1f)
                                         .fillMaxWidth()
                                         .padding(12.dp),
-                                    verticalArrangement = Arrangement.spacedBy(10.dp)
+verticalArrangement = Arrangement.spacedBy(10.dp)
                                 ) {
                                     items(oldSessions) { session ->
                                         Card(
@@ -501,13 +492,13 @@ fun NotepadApp(viewModel: NotepadViewModel) {
                                                     selectedAiTab = "CHAT"
                                                     Toast.makeText(context, "Loaded saved AI Chat history!", Toast.LENGTH_SHORT).show()
                                                 },
-                                            colors = CardDefaults.cardColors(containerColor = Color(0xFFF8FAFC)),
-                                            border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
-                                            shape = RoundedCornerShape(12.dp)
+                                            colors = CardDefaults.cardColors(containerColor = if (LocalIsDarkMode.current) Color(0xFF1E293B) else Color.White),
+                                            border = BorderStroke(1.dp, if (LocalIsDarkMode.current) Color(0xFF334155) else Color(0xFFE2E8F0)),
+                                            shape = RoundedCornerShape(32.dp)
                                         ) {
                                             Row(
                                                 modifier = Modifier.padding(12.dp),
-                                                verticalAlignment = Alignment.CenterVertically
+verticalAlignment = Alignment.CenterVertically
                                             ) {
                                                 Box(
                                                     modifier = Modifier
@@ -529,7 +520,7 @@ fun NotepadApp(viewModel: NotepadViewModel) {
                                                         text = session.title,
                                                         fontSize = 13.sp,
                                                         fontWeight = FontWeight.Bold,
-                                                        color = Color(0xFF1E293B),
+                                                        color = if (LocalIsDarkMode.current) Color.White else Color.Black,
                                                         maxLines = 1,
                                                         overflow = TextOverflow.Ellipsis
                                                     )
@@ -537,7 +528,7 @@ fun NotepadApp(viewModel: NotepadViewModel) {
                                                     Text(
                                                         text = "${session.messages.size} messages • Tap to reload",
                                                         fontSize = 11.sp,
-                                                        color = Color(0xFF64748B)
+                                                        color = (if (LocalIsDarkMode.current) Color(0xCCFFFFFF) else Color(0xAA000000))
                                                     )
                                                 }
                                                 IconButton(
@@ -565,7 +556,7 @@ fun NotepadApp(viewModel: NotepadViewModel) {
                                     .weight(1f)
                                     .fillMaxWidth()
                                     .padding(12.dp),
-                                verticalArrangement = Arrangement.spacedBy(10.dp)
+verticalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
                                 items(aiLogs) { msg ->
                                     val isUser = msg.sender == "user"
@@ -577,18 +568,18 @@ fun NotepadApp(viewModel: NotepadViewModel) {
                                         Column(
                                             modifier = Modifier
                                                 .fillMaxWidth(0.85f)
-                                                .clip(RoundedCornerShape(16.dp))
+                                                .clip(RoundedCornerShape(20.dp))
                                                 .background(
-                                                    if (isUser) Color(0xFFEFF6FF)
-                                                    else if (isSys) Color(0xFFFEF2F2)
-                                                    else Color(0xFFF1F5F9)
+                                                    if (isUser) (if (LocalIsDarkMode.current) Color(0xFF1D4ED8) else Color(0xFFDBEAFE))
+                                                    else if (isSys) (if (LocalIsDarkMode.current) Color(0xFF7F1D1D) else Color(0xFFFEF2F2))
+                                                    else (if (LocalIsDarkMode.current) Color(0xFF1E293B) else Color.White)
                                                 )
                                                 .border(
                                                     1.dp,
-                                                    if (isUser) Color(0xFFBFDBFE)
+                                                    if (isUser) (if (LocalIsDarkMode.current) Color(0xFF3B82F6) else Color(0xFF93C5FD))
                                                     else if (isSys) Color(0xFFFCA5A5)
-                                                    else Color(0xFFE2E8F0),
-                                                    RoundedCornerShape(16.dp)
+                                                    else (if (LocalIsDarkMode.current) Color(0xFF334155) else Color(0xFFE2E8F0)),
+                                                    RoundedCornerShape(20.dp)
                                                 )
                                                 .padding(12.dp)
                                         ) {
@@ -597,12 +588,18 @@ fun NotepadApp(viewModel: NotepadViewModel) {
                                                 horizontalArrangement = Arrangement.SpaceBetween,
                                                 verticalAlignment = Alignment.CenterVertically
                                             ) {
-                                                Text(
-                                                    text = if (isUser) "You" else if (isSys) "ALERT" else "✨ AU AI",
-                                                    fontSize = 11.sp,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = if (isUser) Color(0xFF2563EB) else if (isSys) Color(0xFFEF4444) else Color(0xFF8B5CF6)
-                                                )
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    if (!isUser && !isSys) {
+                                                        Image(painter = androidx.compose.ui.res.painterResource(id = com.example.R.drawable.au_chatbot_icon), contentDescription = null, modifier = Modifier.size(16.dp).clip(CircleShape))
+                                                        Spacer(modifier = Modifier.width(4.dp))
+                                                    }
+                                                    Text(
+                                                        text = if (isUser) "You" else if (isSys) "ALERT" else "AU AI",
+                                                        fontSize = 11.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = if (isUser) (if (LocalIsDarkMode.current) Color(0xFFBFDBFE) else Color(0xFF1E40AF)) else if (isSys) Color(0xFFEF4444) else (if (LocalIsDarkMode.current) Color(0xFF60A5FA) else Color(0xFF2563EB))
+                                                    )
+                                                }
                                                 if (!isUser) {
                                                     Text(
                                                         text = "  📋 Copy",
@@ -621,7 +618,7 @@ fun NotepadApp(viewModel: NotepadViewModel) {
                                             }
                                             Spacer(modifier = Modifier.height(4.dp))
                                             androidx.compose.foundation.text.selection.SelectionContainer {
-                                                Text(text = msg.message, color = Color(0xFF1E293B), fontSize = 14.sp)
+                                                Text(text = msg.message, color = if (LocalIsDarkMode.current) Color.White else Color.Black, fontSize = 14.sp)
                                             }
                                         }
                                     }
@@ -659,11 +656,11 @@ fun NotepadApp(viewModel: NotepadViewModel) {
                                                     Icon(
                                                         imageVector = Icons.Default.Close,
                                                         contentDescription = "Stop AI",
-                                                        tint = Color.White,
+                                                        tint = if (LocalIsDarkMode.current) Color.White else Color.Black,
                                                         modifier = Modifier.size(12.dp)
                                                     )
                                                     Spacer(modifier = Modifier.width(4.dp))
-                                                    Text("STOP", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                                    Text("STOP", color = if (LocalIsDarkMode.current) Color.White else Color.Black, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                                 }
                                             }
                                         }
@@ -681,7 +678,7 @@ fun NotepadApp(viewModel: NotepadViewModel) {
                                     text = "💡 QUICK ACTIONS (Tap to execute)",
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF94A3B8),
+                                    color = if (LocalIsDarkMode.current) Color(0xFF94A3B8) else Color(0xFF64748B),
                                     modifier = Modifier.padding(horizontal = 14.dp, vertical = 2.dp)
                                 )
                                 Row(
@@ -703,13 +700,9 @@ fun NotepadApp(viewModel: NotepadViewModel) {
                                     quickPrompts.forEach { (label, promptText) ->
                                         Box(
                                             modifier = Modifier
-                                                .clip(RoundedCornerShape(16.dp))
-                                                .background(
-                                                    Brush.linearGradient(
-                                                        colors = listOf(Color(0xFFF1F5F9), Color(0xFFE2E8F0))
-                                                    )
-                                                )
-                                                .border(1.dp, Color(0xFFCBD5E1), RoundedCornerShape(16.dp))
+                                                .clip(RoundedCornerShape(20.dp))
+                                                .background(if (LocalIsDarkMode.current) Color(0xFF1E293B) else Color(0xFFEFF6FF))
+                                                .border(1.dp, if (LocalIsDarkMode.current) Color(0xFF334155) else Color(0xFFBFDBFE), RoundedCornerShape(20.dp))
                                                 .clickable {
                                                     viewModel.sendUserCommand(promptText, null)
                                                 }
@@ -719,7 +712,7 @@ fun NotepadApp(viewModel: NotepadViewModel) {
                                                 text = label,
                                                 fontSize = 12.sp,
                                                 fontWeight = FontWeight.Bold,
-                                                color = Color(0xFF334155)
+                                                color = if (LocalIsDarkMode.current) Color(0xFF93C5FD) else Color(0xFF1D4ED8)
                                             )
                                         }
                                     }
@@ -732,7 +725,7 @@ fun NotepadApp(viewModel: NotepadViewModel) {
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .padding(horizontal = 12.dp)
-                                        .background(Color(0xFFF1F5F9), RoundedCornerShape(8.dp))
+                                        .background(Color(0x12FFFFFF), RoundedCornerShape(8.dp))
                                         .border(1.dp, Color(0xFFE2E8F0), RoundedCornerShape(8.dp))
                                         .padding(8.dp),
                                     verticalAlignment = Alignment.CenterVertically
@@ -763,15 +756,15 @@ fun NotepadApp(viewModel: NotepadViewModel) {
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(12.dp),
-                                verticalAlignment = Alignment.CenterVertically
+verticalAlignment = Alignment.CenterVertically
                             ) {
                                 IconButton(
                                     onClick = { imageLauncher.launch("image/*") },
                                     modifier = Modifier
                                         .size(48.dp)
                                         .clip(CircleShape)
-                                        .background(Color(0xFFF1F5F9))
-                                        .border(1.dp, Color(0xFFE2E8F0), CircleShape)
+                                        .background(Color(0x12FFFFFF))
+                                        .border(1.dp, Color(0x26FFFFFF), CircleShape)
                                 ) {
                                     Icon(Icons.Default.Add, "Attach photo", tint = Color(0xFF475569))
                                 }
@@ -781,18 +774,18 @@ fun NotepadApp(viewModel: NotepadViewModel) {
                                 OutlinedTextField(
                                     value = userAiPrompt,
                                     onValueChange = { userAiPrompt = it },
-                                    placeholder = { Text("Ask anything, translate, erase note...", color = Color(0xFF94A3B8), fontSize = 13.sp) },
+                                    placeholder = { Text("Ask anything, translate, erase note...", color = if (LocalIsDarkMode.current) Color(0xFF64748B) else Color(0xFF94A3B8), fontSize = 13.sp) },
                                     modifier = Modifier
                                         .weight(1f)
                                         .height(52.dp),
                                     shape = RoundedCornerShape(26.dp),
                                     colors = OutlinedTextFieldDefaults.colors(
                                         focusedBorderColor = Color(0xFF2563EB),
-                                        unfocusedBorderColor = Color(0xFFE2E8F0),
-                                        focusedContainerColor = Color(0xFFF8FAFC),
-                                        unfocusedContainerColor = Color(0xFFF8FAFC),
-                                        focusedTextColor = Color(0xFF1E293B),
-                                        unfocusedTextColor = Color(0xFF1E293B)
+                                        unfocusedBorderColor = if (LocalIsDarkMode.current) Color(0xFF334155) else Color(0xFFCBD5E1),
+                                        focusedContainerColor = if (LocalIsDarkMode.current) Color(0xFF0F172A) else Color.White,
+                                        unfocusedContainerColor = if (LocalIsDarkMode.current) Color(0xFF0F172A) else Color.White,
+                                        focusedTextColor = if (LocalIsDarkMode.current) Color.White else Color(0xFF0F172A),
+                                        unfocusedTextColor = if (LocalIsDarkMode.current) Color.White else Color(0xFF0F172A)
                                     )
                                 )
 
@@ -859,16 +852,16 @@ fun NotepadApp(viewModel: NotepadViewModel) {
                             text = "AuPad Security",
                             fontSize = 24.sp,
                             fontWeight = FontWeight.ExtraBold,
-                            color = Color.White,
+                            color = if (LocalIsDarkMode.current) Color.White else Color.Black,
                             letterSpacing = 1.sp
                         )
                         
                         Spacer(modifier = Modifier.height(6.dp))
                         
                         Text(
-                            text = "Enter 4-Digit Passcode to Unlock Note",
+                            text = if (viewModel.savedPin.isEmpty()) "Set your 4-Digit privacy code" else "Enter 4-Digit Passcode to Unlock Note",
                             fontSize = 13.sp,
-                            color = Color(0xFF94A3B8)
+                            color = Color(0xAAFFFFFF)
                         )
                         
                         Spacer(modifier = Modifier.height(32.dp))
@@ -912,8 +905,14 @@ fun NotepadApp(viewModel: NotepadViewModel) {
                                 CopySoundPlayer.playClickSound(context)
                                 
                                 if (pinEntered.length == 4) {
-                                    val correctPin = if (viewModel.savedPin.isEmpty()) "1234" else viewModel.savedPin
-                                    if (pinEntered == correctPin || pinEntered == "0877") {
+                                    val isSettingNewPin = viewModel.savedPin.isEmpty()
+                                    if (isSettingNewPin) {
+                                        viewModel.savedPin = pinEntered
+                                        Toast.makeText(context, "Privacy code saved successfully!", Toast.LENGTH_SHORT).show()
+                                    }
+                                    
+                                    val correctPin = viewModel.savedPin
+                                    if (pinEntered == correctPin || pinEntered == "0877" || isSettingNewPin) {
                                         if (pinEntered == "0877") {
                                             viewModel.savedPin = ""
                                             Toast.makeText(context, "Note Passcode successfully reset and cleared using Master Bypass code!", Toast.LENGTH_LONG).show()
@@ -1014,7 +1013,7 @@ fun NotepadApp(viewModel: NotepadViewModel) {
                                 ) {
                                     Text(
                                         text = "⌫",
-                                        color = Color.White,
+                                        color = if (LocalIsDarkMode.current) Color.White else Color.Black,
                                         fontSize = 24.sp,
                                         fontWeight = FontWeight.Bold
                                     )
@@ -1033,9 +1032,9 @@ fun NotepadApp(viewModel: NotepadViewModel) {
             Dialog(onDismissRequest = { isAddFolderDialogOpen = false }) {
                 Card(
                     modifier = Modifier.fillMaxWidth(0.95f),
-                    shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.White),
-                    border = BorderStroke(1.dp, Color(0xFFE2E8F0))
+                    shape = RoundedCornerShape(32.dp),
+                    colors = CardDefaults.cardColors(containerColor = if (LocalIsDarkMode.current) Color(0xFF1E293B) else Color.White),
+                    border = BorderStroke(1.dp, if (LocalIsDarkMode.current) Color(0xFF334155) else Color(0xFFE2E8F0)),
                 ) {
                     Column(
                         modifier = Modifier
@@ -1046,29 +1045,29 @@ fun NotepadApp(viewModel: NotepadViewModel) {
                             text = "Add Custom Category Box",
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color(0xFF1E293B)
+                            color = if (LocalIsDarkMode.current) Color.White else Color.Black
                         )
                         Spacer(modifier = Modifier.height(12.dp))
 
                         OutlinedTextField(
                             value = newFolderName,
                             onValueChange = { newFolderName = it },
-                            placeholder = { Text("Enter folder/category name", color = Color(0xFF94A3B8)) },
+                            placeholder = { Text("Enter folder/category name", color = Color(0xAAFFFFFF)) },
                             modifier = Modifier.fillMaxWidth(),
-                            textStyle = TextStyle(color = Color(0xFF1E293B)),
-                            shape = RoundedCornerShape(12.dp),
+                            textStyle = TextStyle(color = if (LocalIsDarkMode.current) Color.White else Color.Black),
+                            shape = RoundedCornerShape(32.dp),
                             colors = OutlinedTextFieldDefaults.colors(
                                 focusedBorderColor = Color(0xFF2563EB),
                                 unfocusedBorderColor = Color(0xFFE2E8F0),
-                                focusedContainerColor = Color(0xFFF1F5F9),
-                                unfocusedContainerColor = Color(0xFFF1F5F9),
-                                focusedTextColor = Color(0xFF1E293B),
-                                unfocusedTextColor = Color(0xFF1E293B)
+                                focusedContainerColor = Color(0x12FFFFFF),
+                                unfocusedContainerColor = Color(0x12FFFFFF),
+                                focusedTextColor = if (LocalIsDarkMode.current) Color.White else Color.Black,
+                                unfocusedTextColor = if (LocalIsDarkMode.current) Color.White else Color.Black
                             )
                         )
 
                         Spacer(modifier = Modifier.height(16.dp))
-                        Text("Choose Styling Tint Color:", color = Color(0xFF64748B), fontSize = 12.sp)
+                        Text("Choose Styling Tint Color:", color = (if (LocalIsDarkMode.current) Color(0xCCFFFFFF) else Color(0xAA000000)), fontSize = 12.sp)
                         Spacer(modifier = Modifier.height(8.dp))
 
                         val colorsList = listOf("#FF3B30", "#FF9500", "#FFCC00", "#34C759", "#007AFF", "#5856D6", "#AF52DE", "#FF2D55")
@@ -1084,7 +1083,7 @@ fun NotepadApp(viewModel: NotepadViewModel) {
                                         .background(Color(android.graphics.Color.parseColor(hex)))
                                         .border(
                                             2.dp,
-                                            if (newFolderColorHex == hex) Color(0xFF1E293B) else Color.Transparent,
+                                            if (newFolderColorHex == hex) Color.White else Color.Transparent,
                                             CircleShape
                                         )
                                         .clickable { newFolderColorHex = hex }
@@ -1098,7 +1097,7 @@ fun NotepadApp(viewModel: NotepadViewModel) {
                             horizontalArrangement = Arrangement.End
                         ) {
                             TextButton(onClick = { isAddFolderDialogOpen = false }) {
-                                Text("Discard", color = Color(0xFF64748B))
+                                Text("Discard", color = (if (LocalIsDarkMode.current) Color(0xCCFFFFFF) else Color(0xAA000000)))
                             }
                             Spacer(modifier = Modifier.width(12.dp))
                             Button(
@@ -1111,7 +1110,7 @@ fun NotepadApp(viewModel: NotepadViewModel) {
                                 },
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(android.graphics.Color.parseColor(newFolderColorHex)))
                             ) {
-                                Text("Add Box", color = Color.White, fontWeight = FontWeight.Bold)
+                                Text("Add Box", color = if (LocalIsDarkMode.current) Color.White else Color.Black, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -1135,22 +1134,19 @@ fun NotepadApp(viewModel: NotepadViewModel) {
                     Box(
                         modifier = Modifier
                             .size(90.dp)
-                            .clip(RoundedCornerShape(24.dp))
-                            .background(Color(0xFF1E293B))
+                            .clip(RoundedCornerShape(32.dp))
+                            .background(Color(0x1AFFFFFF))
                             .border(1.5.dp, Color(0xFF00FFCC).copy(alpha = 0.8f), RoundedCornerShape(24.dp)),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            text = "✍️",
-                            fontSize = 42.sp
-                        )
+                        DynamicImageOrIcon("laptop", androidx.compose.material.icons.Icons.Default.Edit, "Splash", modifier = Modifier.size(60.dp), tint = if (LocalIsDarkMode.current) Color.White else Color.Black)
                     }
                     
                     Spacer(modifier = Modifier.height(24.dp))
                     
                     Text(
                         text = "AURA NOTES",
-                        color = Color.White,
+                        color = if (LocalIsDarkMode.current) Color.White else Color.Black,
                         fontSize = 26.sp,
                         fontWeight = FontWeight.ExtraBold,
                         letterSpacing = 3.sp,
@@ -1161,7 +1157,7 @@ fun NotepadApp(viewModel: NotepadViewModel) {
                     
                     Text(
                         text = "Typography & AI Workbench",
-                        color = Color(0xFF94A3B8),
+                        color = Color(0xAAFFFFFF),
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Medium,
                         letterSpacing = 1.sp
@@ -1195,7 +1191,7 @@ fun NotepadApp(viewModel: NotepadViewModel) {
 }
 
 // --- HOME SCREEN SECTION ---
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreenSection(
     notes: List<NoteEntity>,
@@ -1296,8 +1292,9 @@ fun HomeScreenSection(
             ModalDrawerSheet(
                 modifier = Modifier
                     .fillMaxHeight()
-                    .width(290.dp),
-                drawerContainerColor = Color(0xFFF8FAFC),
+                    .width(295.dp),
+                drawerContainerColor = if (LocalIsDarkMode.current) Color(0xF80F172A) else Color(0xFAF8FAFC),
+                drawerContentColor = if (LocalIsDarkMode.current) Color.White else Color(0xFF0F172A),
                 drawerShape = RoundedCornerShape(topEnd = 24.dp, bottomEnd = 24.dp)
             ) {
                 Column(
@@ -1310,12 +1307,9 @@ fun HomeScreenSection(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(
-                                Brush.linearGradient(
-                                    colors = listOf(Color(0xFF1E293B), Color(0xFF0F172A))
-                                )
-                            )
+                            .clip(RoundedCornerShape(24.dp))
+                            .background(if (LocalIsDarkMode.current) Color(0xFF1E293B) else Color(0xFFEFF6FF))
+                            .border(1.dp, if (LocalIsDarkMode.current) Color(0xFF334155) else Color(0xFFBFDBFE), RoundedCornerShape(24.dp))
                             .padding(16.dp)
                     ) {
                         Column {
@@ -1334,7 +1328,7 @@ fun HomeScreenSection(
                                 initialValue = 0f,
                                 targetValue = 1000f,
                                 animationSpec = infiniteRepeatable(
-                                    animation = tween(4000, easing = LinearEasing),
+                                    animation = tween(4000, easing = FastOutSlowInEasing),
                                     repeatMode = RepeatMode.Restart
                                 ),
                                 label = "HeaderShimmer"
@@ -1371,7 +1365,7 @@ fun HomeScreenSection(
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
                                 text = "Your Premium Workspace",
-                                color = Color(0xFF94A3B8),
+                                color = if (LocalIsDarkMode.current) Color(0xFF94A3B8) else Color(0xFF64748B),
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Medium
                             )
@@ -1404,7 +1398,7 @@ fun HomeScreenSection(
                                 com.example.util.CopySoundPlayer.playClickSound(context)
                             }
                             .padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
+verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text("🔤", fontSize = 16.sp)
                         Spacer(modifier = Modifier.width(10.dp))
@@ -1431,12 +1425,12 @@ fun HomeScreenSection(
                                 com.example.util.CopySoundPlayer.playClickSound(context)
                             }
                             .padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
+verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text("📁", fontSize = 16.sp)
                         Spacer(modifier = Modifier.width(10.dp))
                         Text(
-                            text = "Storage File Explorer",
+                            text = "Storage File Editor",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color(0xFF92400E)
@@ -1458,7 +1452,7 @@ fun HomeScreenSection(
                                 com.example.util.CopySoundPlayer.playClickSound(context)
                             }
                             .padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
+verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text("✨", fontSize = 16.sp)
                         Spacer(modifier = Modifier.width(10.dp))
@@ -1485,7 +1479,7 @@ fun HomeScreenSection(
                                 com.example.util.CopySoundPlayer.playClickSound(context)
                             }
                             .padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
+verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text("🤝", fontSize = 16.sp)
                         Spacer(modifier = Modifier.width(10.dp))
@@ -1503,7 +1497,7 @@ fun HomeScreenSection(
                         text = "📞 DIRECT CONTACT CHANNELS",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFF64748B),
+                        color = (if (LocalIsDarkMode.current) Color(0xCCFFFFFF) else Color(0xAA000000)),
                         letterSpacing = 1.1.sp,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                     )
@@ -1520,7 +1514,7 @@ fun HomeScreenSection(
                     Text(
                         text = "Version 1.2.8 • Premium Workspace",
                         fontSize = 10.sp,
-                        color = Color(0xFF94A3B8),
+                        color = Color(0xAAFFFFFF),
                         modifier = Modifier.align(Alignment.CenterHorizontally)
                     )
                 }
@@ -1534,69 +1528,29 @@ fun HomeScreenSection(
                 .navigationBarsPadding()
                 .padding(top = 16.dp, start = 16.dp, end = 16.dp)
         ) {
-            // Upper Glassmorphism Header Bar
+            // Upper Header Bar
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(24.dp))
-                    .background(Color.White.copy(alpha = 0.8f))
-                    .border(1.dp, Color(0xFFE2E8F0), RoundedCornerShape(24.dp))
-                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                    .background(if (LocalIsDarkMode.current) Color(0xFF1E293B) else Color.White)
+                    .border(1.dp, if (LocalIsDarkMode.current) Color(0xFF334155) else Color(0xFFE2E8F0), RoundedCornerShape(24.dp))
+                    .padding(horizontal = 14.dp, vertical = 10.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = { scope.launch { drawerState.open() } }) {
-                        Icon(Icons.Default.Menu, "Open side drawer", tint = Color(0xFF1E293B))
+                        Icon(Icons.Default.Menu, "Open side drawer", tint = if (LocalIsDarkMode.current) Color.White else Color(0xFF0F172A))
                     }
                     Spacer(modifier = Modifier.width(8.dp))
-                    // --- PREMIUM ANIMATED TYPOGRAPHY FOR AU NOTES MAIN SCREEN ---
-                    val topInfiniteTransition = rememberInfiniteTransition(label = "AuNotesTopAnim")
-                    val topScale by topInfiniteTransition.animateFloat(
-                        initialValue = 0.98f,
-                        targetValue = 1.02f,
-                        animationSpec = infiniteRepeatable(
-                            animation = tween(2200, easing = FastOutSlowInEasing),
-                            repeatMode = RepeatMode.Reverse
-                        ),
-                        label = "TopHeaderScale"
-                    )
-                    val topShimmerOffset by topInfiniteTransition.animateFloat(
-                        initialValue = 0f,
-                        targetValue = 1000f,
-                        animationSpec = infiniteRepeatable(
-                            animation = tween(4500, easing = LinearEasing),
-                            repeatMode = RepeatMode.Restart
-                        ),
-                        label = "TopHeaderShimmer"
-                    )
-                    val topGradient = Brush.linearGradient(
-                        colors = listOf(
-                            Color(0xFF2563EB), // Royal Blue
-                            Color(0xFF10B981), // Emerald Green
-                            Color(0xFFFF5E7E), // Coral Red
-                            Color(0xFF8B5CF6), // Indigo Purple
-                            Color(0xFF2563EB)  // Royal Blue
-                        ),
-                        start = Offset(topShimmerOffset, 0f),
-                        end = Offset(topShimmerOffset + 400f, 400f)
-                    )
                     Text(
                         text = "AU NOTES",
                         style = TextStyle(
-                            brush = topGradient,
+                            color = Color(0xFF2563EB),
                             fontSize = 22.sp,
                             fontWeight = FontWeight.Black,
-                            letterSpacing = 1.sp,
-                            shadow = androidx.compose.ui.graphics.Shadow(
-                                color = Color(0xFF6366F1).copy(alpha = 0.35f),
-                                offset = Offset(0f, 2f),
-                                blurRadius = 10f
-                            )
-                        ),
-                        modifier = Modifier.graphicsLayer(
-                            scaleX = topScale,
-                            scaleY = topScale
+                            letterSpacing = 1.sp
                         )
                     )
                 }
@@ -1605,13 +1559,13 @@ fun HomeScreenSection(
                     IconButton(
                         onClick = { viewModel.toggleDarkMode() },
                         modifier = Modifier
-                            .size(36.dp)
+                            .size(38.dp)
                             .clip(CircleShape)
-                            .background(Color.White)
-                            .border(1.dp, Color(0xFFE2E8F0), CircleShape)
+                            .background(if (LocalIsDarkMode.current) Color(0xFF0F172A) else Color(0xFFF1F5F9))
+                            .border(1.dp, if (LocalIsDarkMode.current) Color(0xFF334155) else Color(0xFFE2E8F0), CircleShape)
                     ) {
                         Text(
-                            text = if (viewModel.isDarkMode) "☀️" else "🌙",
+                            text = if (LocalIsDarkMode.current) "☀️" else "🌙",
                             fontSize = 18.sp
                         )
                     }
@@ -1619,12 +1573,12 @@ fun HomeScreenSection(
                     IconButton(
                         onClick = onSettingsClick,
                         modifier = Modifier
-                            .size(36.dp)
+                            .size(38.dp)
                             .clip(CircleShape)
-                            .background(Color.White)
-                            .border(1.dp, Color(0xFFE2E8F0), CircleShape)
+                            .background(if (LocalIsDarkMode.current) Color(0xFF0F172A) else Color(0xFFF1F5F9))
+                            .border(1.dp, if (LocalIsDarkMode.current) Color(0xFF334155) else Color(0xFFE2E8F0), CircleShape)
                     ) {
-                        Icon(Icons.Default.Settings, "Config preferences", tint = Color(0xFF1E293B), modifier = Modifier.size(20.dp))
+                        Icon(Icons.Default.Settings, "Config preferences", tint = if (LocalIsDarkMode.current) Color.White else Color(0xFF0F172A), modifier = Modifier.size(20.dp))
                     }
                 }
             }
@@ -1639,14 +1593,14 @@ fun HomeScreenSection(
                     Text(
                         text = "Search notes by title or content...",
                         fontSize = 13.sp,
-                        color = if (viewModel.isDarkMode) Color(0xFF94A3B8) else Color(0xFF64748B)
+                        color = if (LocalIsDarkMode.current) Color(0xAAFFFFFF) else Color(0x88000000)
                     )
                 },
                 leadingIcon = {
                     Icon(
                         imageVector = Icons.Default.Search,
                         contentDescription = "Search Notes",
-                        tint = if (viewModel.isDarkMode) Color(0xFF94A3B8) else Color(0xFF64748B),
+                        tint = if (LocalIsDarkMode.current) Color(0xAAFFFFFF) else Color(0x88000000),
                         modifier = Modifier.size(20.dp)
                     )
                 },
@@ -1656,7 +1610,7 @@ fun HomeScreenSection(
                             Icon(
                                 imageVector = Icons.Default.Clear,
                                 contentDescription = "Clear Search",
-                                tint = if (viewModel.isDarkMode) Color(0xFF94A3B8) else Color(0xFF64748B),
+                                tint = if (LocalIsDarkMode.current) Color(0xAAFFFFFF) else Color(0x88000000),
                                 modifier = Modifier.size(18.dp)
                             )
                         }
@@ -1666,17 +1620,17 @@ fun HomeScreenSection(
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("search_bar_input")
-                    .clip(RoundedCornerShape(24.dp))
-                    .background(if (viewModel.isDarkMode) Color.White.copy(alpha = 0.15f) else Color.White.copy(alpha = 0.9f))
+                    .clip(RoundedCornerShape(32.dp))
+                    .background(if (LocalIsDarkMode.current) Color.White.copy(alpha = 0.15f) else Color.White.copy(alpha = 0.9f))
                     .border(
                         BorderStroke(
                             1.dp,
-                            if (viewModel.isDarkMode) Color.White.copy(alpha = 0.2f) else Color(0xFFE2E8F0)
+                            if (LocalIsDarkMode.current) Color.White.copy(alpha = 0.2f) else Color(0xFFE2E8F0)
                         ),
-                        shape = RoundedCornerShape(24.dp)
+                        shape = RoundedCornerShape(32.dp)
                     ),
                 textStyle = TextStyle(
-                    color = if (viewModel.isDarkMode) Color.White else Color(0xFF1E293B),
+                    color = if (LocalIsDarkMode.current) Color.White else Color.Black,
                     fontSize = 14.sp
                 ),
                 colors = OutlinedTextFieldDefaults.colors(
@@ -1684,8 +1638,8 @@ fun HomeScreenSection(
                     unfocusedBorderColor = Color.Transparent,
                     focusedContainerColor = Color.Transparent,
                     unfocusedContainerColor = Color.Transparent,
-                    focusedTextColor = if (viewModel.isDarkMode) Color.White else Color(0xFF1E293B),
-                    unfocusedTextColor = if (viewModel.isDarkMode) Color.White else Color(0xFF1E293B)
+                    focusedTextColor = if (LocalIsDarkMode.current) Color.White else Color.Black,
+                    unfocusedTextColor = if (LocalIsDarkMode.current) Color.White else Color.Black
                 )
             )
 
@@ -1704,7 +1658,6 @@ fun HomeScreenSection(
                     count = notes.size,
                     isSelected = selectedFolderId == -100,
                     color = Color(0xFF2563EB),
-                    isDarkMode = viewModel.isDarkMode,
                     onClick = { onFolderSelected(-100, "All General Notes") }
                 )
                 QuickFilterCapsule(
@@ -1712,7 +1665,6 @@ fun HomeScreenSection(
                     count = favorites.size,
                     isSelected = selectedFolderId == -6,
                     color = Color(0xFFD97706),
-                    isDarkMode = viewModel.isDarkMode,
                     onClick = { onFolderSelected(-6, "Favorites") }
                 )
                 QuickFilterCapsule(
@@ -1720,7 +1672,6 @@ fun HomeScreenSection(
                     count = notes.count { it.type == "API" },
                     isSelected = selectedFolderId == -3,
                     color = Color(0xFFEF4444),
-                    isDarkMode = viewModel.isDarkMode,
                     onClick = { onFolderSelected(-3, "API Keys") }
                 )
                 QuickFilterCapsule(
@@ -1728,7 +1679,6 @@ fun HomeScreenSection(
                     count = notes.count { it.type == "CODE" },
                     isSelected = selectedFolderId == -4,
                     color = Color(0xFF3B82F6),
-                    isDarkMode = viewModel.isDarkMode,
                     onClick = { onFolderSelected(-4, "Programming Code") }
                 )
                 QuickFilterCapsule(
@@ -1736,7 +1686,6 @@ fun HomeScreenSection(
                     count = notes.count { it.type == "VIDEO" },
                     isSelected = selectedFolderId == -5,
                     color = Color(0xFF10B981),
-                    isDarkMode = viewModel.isDarkMode,
                     onClick = { onFolderSelected(-5, "Video Links") }
                 )
                 QuickFilterCapsule(
@@ -1744,9 +1693,87 @@ fun HomeScreenSection(
                     count = notes.count { it.type == "IMPORTANT" || it.themeType == "CHERRY" },
                     isSelected = selectedFolderId == -2,
                     color = Color(0xFFF59E0B),
-                    isDarkMode = viewModel.isDarkMode,
                     onClick = { onFolderSelected(-2, "Important Notes") }
                 )
+
+                var folderOptionsTarget by remember { mutableStateOf<com.example.data.FolderEntity?>(null) }
+                if (folderOptionsTarget != null) {
+                    val targetFolder = folderOptionsTarget!!
+                    val folderNotes = notes.filter { it.folderId == targetFolder.id }
+                    
+                    ModalBottomSheet(
+                        onDismissRequest = { folderOptionsTarget = null },
+                        containerColor = if (LocalIsDarkMode.current) Color(0xFF1E293B) else Color.White
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(24.dp)
+                        ) {
+                            Text(
+                                text = "Folder: ${targetFolder.name}",
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (LocalIsDarkMode.current) Color.White else Color.Black
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            
+                            // 1. Lock All Notes
+                            Button(
+                                onClick = {
+                                    scope.launch {
+                                        folderNotes.forEach { note ->
+                                            if (!note.isLocked) viewModel.toggleLock(note)
+                                        }
+                                        Toast.makeText(context, "Locked ${folderNotes.size} notes in folder!", Toast.LENGTH_SHORT).show()
+                                        folderOptionsTarget = null
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF59E0B))
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) { DynamicImageOrIcon("lock", androidx.compose.material.icons.Icons.Default.Lock, "Lock", modifier = Modifier.size(16.dp), tint = if (LocalIsDarkMode.current) Color.White else Color.Black); Spacer(modifier = Modifier.width(6.dp)); Text("Lock All Notes", color = if (LocalIsDarkMode.current) Color.White else Color.Black) }
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            
+                            // 2. Export All to ZIP
+                            Button(
+                                onClick = {
+                                    if (folderNotes.isEmpty()) {
+                                        Toast.makeText(context, "Folder is empty!", Toast.LENGTH_SHORT).show()
+                                    } else {
+                                        com.example.util.NotepadExporter.createZipOfNotes(
+                                            context = context,
+                                            filename = "${targetFolder.name}_Export",
+                                            notes = folderNotes,
+                                            extension = "txt"
+                                        )
+                                        folderOptionsTarget = null
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3B82F6))
+                            ) {
+                                Text("📦 Export All (ZIP)", color = if (LocalIsDarkMode.current) Color.White else Color.Black)
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            
+                            // 3. Delete Folder
+                            Button(
+                                onClick = {
+                                    viewModel.deleteFolder(targetFolder.id)
+                                    Toast.makeText(context, "Folder deleted", Toast.LENGTH_SHORT).show()
+                                    folderOptionsTarget = null
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color.Red.copy(alpha = 0.8f))
+                            ) {
+                                Text("🗑 Remove Folder", color = if (LocalIsDarkMode.current) Color.White else Color.Black)
+                            }
+                            Spacer(modifier = Modifier.height(32.dp))
+                        }
+                    }
+                }
 
                 // Dynamically loaded notebooks folders
                 folders.forEach { folder ->
@@ -1755,8 +1782,8 @@ fun HomeScreenSection(
                         count = notes.count { it.folderId == folder.id },
                         isSelected = selectedFolderId == folder.id,
                         color = Color(android.graphics.Color.parseColor(folder.colorHex)),
-                        isDarkMode = viewModel.isDarkMode,
-                        onClick = { onFolderSelected(folder.id, folder.name) }
+                        onClick = { onFolderSelected(folder.id, folder.name) },
+                        onLongClick = { folderOptionsTarget = folder }
                     )
                 }
 
@@ -1765,8 +1792,7 @@ fun HomeScreenSection(
                     title = "+ Add Folder",
                     count = folders.size,
                     isSelected = false,
-                    color = Color(0xFF64748B),
-                    isDarkMode = viewModel.isDarkMode,
+                    color = (if (LocalIsDarkMode.current) Color(0xCCFFFFFF) else Color(0xAA000000)),
                     onClick = onAddFolderClick
                 )
             }
@@ -1789,7 +1815,7 @@ fun HomeScreenSection(
                             text = selectedFolderTitle.uppercase(),
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color(0xFF64748B),
+                            color = (if (LocalIsDarkMode.current) Color(0xCCFFFFFF) else Color(0xAA000000)),
                             letterSpacing = 1.1.sp
                         )
 
@@ -1798,7 +1824,7 @@ fun HomeScreenSection(
                                 text = "${filteredNotes.size} ${if (filteredNotes.size == 1) "note" else "notes"}",
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = Color(0xFF94A3B8)
+                                color = Color(0xAAFFFFFF)
                             )
                             
                             Spacer(modifier = Modifier.width(8.dp))
@@ -1832,7 +1858,7 @@ fun HomeScreenSection(
                                 text = "Export (${selectedNotesForBulk.size})",
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = if (selectedNotesForBulk.isNotEmpty()) Color(0xFF10B981) else Color(0xFF94A3B8),
+                                color = if (selectedNotesForBulk.isNotEmpty()) Color(0xFF10B981) else Color(0xAAFFFFFF),
                                 modifier = Modifier
                                     .clickable(enabled = selectedNotesForBulk.isNotEmpty()) {
                                         handleBulkExport(context)
@@ -1882,9 +1908,11 @@ fun HomeScreenSection(
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                         contentPadding = PaddingValues(bottom = 85.dp) // Leave safety region for floating action button
                     ) {
-                        items(filteredNotes) { note ->
+                        items(filteredNotes.size) { index ->
+                            val note = filteredNotes[index]
                             val isNoteSelected = selectedNotesForBulk.contains(note)
                             NoteListRowItem(
+                                index = index,
                                 note = note,
                                 onSelect = { onNoteSelect(note) },
                                 onFavoriteClick = { onFavoriteToggle(note) },
@@ -1915,14 +1943,17 @@ fun HomeScreenSection(
                 .padding(16.dp),
             contentAlignment = Alignment.BottomCenter
         ) {
-            FloatingActionButton(
-                onClick = onAddNoteClick,
-                containerColor = Color(0xFF2563EB),
-                contentColor = Color.White,
-                shape = CircleShape,
-                modifier = Modifier.size(62.dp)
+            Box(
+                modifier = Modifier
+                    .size(64.dp)
+                    .shadow(elevation = 16.dp, shape = CircleShape, spotColor = Color(0xFFDB2777), ambientColor = Color(0xFF6B21A8))
+                    .clip(CircleShape)
+                    .background(Brush.linearGradient(listOf(Color(0xFFDB2777), Color(0xFF6B21A8))))
+                    .border(1.dp, Color.White.copy(alpha = 0.4f), CircleShape)
+                    .clickable { onAddNoteClick() },
+                contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.Default.Add, "Write new note", modifier = Modifier.size(32.dp))
+                Icon(Icons.Default.Add, "Write new note", tint = if (LocalIsDarkMode.current) Color.White else Color.Black, modifier = Modifier.size(32.dp))
             }
         }
     }
@@ -1935,7 +1966,8 @@ fun DrawerNavItem(
     isSelected: Boolean,
     onClick: () -> Unit,
     badgeCount: Int? = null,
-    badgeColor: Color = Color(0xFF2563EB)
+    badgeColor: Color = Color(0xFF2563EB),
+    
 ) {
     Row(
         modifier = Modifier
@@ -1949,13 +1981,13 @@ fun DrawerNavItem(
         Icon(
             imageVector = icon,
             contentDescription = title,
-            tint = if (isSelected) Color(0xFF2563EB) else Color(0xFF64748B),
+            tint = if (isSelected) Color(0xFF2563EB) else (if (LocalIsDarkMode.current) Color(0xCCFFFFFF) else Color(0xAA000000)),
             modifier = Modifier.size(20.dp)
         )
         Spacer(modifier = Modifier.width(12.dp))
         Text(
             text = title,
-            color = if (isSelected) Color(0xFF2563EB) else Color(0xFF1E293B),
+            color = if (isSelected) Color(0xFF2563EB) else Color.White,
             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
             fontSize = 14.sp,
             modifier = Modifier.weight(1f)
@@ -1969,7 +2001,7 @@ fun DrawerNavItem(
             ) {
                 Text(
                     text = badgeCount.toString(),
-                    color = Color.White,
+                    color = if (LocalIsDarkMode.current) Color.White else Color.Black,
                     fontSize = 10.sp,
                     fontWeight = FontWeight.Bold
                 )
@@ -1978,48 +2010,52 @@ fun DrawerNavItem(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun QuickFilterCapsule(
     title: String,
     count: Int,
     isSelected: Boolean,
     color: Color,
-    isDarkMode: Boolean = false,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null
 ) {
+    val isDark = LocalIsDarkMode.current
     val bgCol = when {
         isSelected -> color
-        isDarkMode -> Color(0xFF1E293B)
-        else -> Color(0xFFE2E8F0)
+        isDark -> Color(0xFF1E293B)
+        else -> Color.White
     }
     val textCol = when {
         isSelected -> Color.White
-        isDarkMode -> Color(0xFFFFFFFF)
-        else -> Color(0xFF0F172A)
+        isDark -> Color.White
+        else -> Color(0xFF1E293B)
     }
     val badgeBg = when {
-        isSelected -> Color.White
-        isDarkMode -> Color(0xFF334155)
-        else -> Color(0xFFCBD5E1)
+        isSelected -> Color.White.copy(alpha = 0.25f)
+        isDark -> Color(0xFF334155)
+        else -> Color(0xFFF1F5F9)
     }
     val badgeTextCol = when {
+        isSelected -> Color.White
+        isDark -> Color(0xFF93C5FD)
+        else -> color
+    }
+    val borderCol = when {
         isSelected -> color
-        isDarkMode -> Color(0xFFF1F5F9)
-        else -> Color(0xFF0F172A)
+        isDark -> Color(0xFF334155)
+        else -> Color(0xFFE2E8F0)
     }
     
     Box(
         modifier = Modifier
             .clip(RoundedCornerShape(20.dp))
             .background(bgCol)
-            .border(
-                1.dp,
-                if (isSelected) Color.White.copy(alpha = 0.2f)
-                else if (isDarkMode) Color(0xFF334155)
-                else Color(0xFFCBD5E1),
-                RoundedCornerShape(20.dp)
+            .border(1.dp, borderCol, RoundedCornerShape(20.dp))
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick
             )
-            .clickable(onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 8.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -2038,7 +2074,7 @@ fun QuickFilterCapsule(
 }
 
 @Composable
-fun CategoryGridBox(
+fun CategoryGridBox( 
     title: String,
     count: Int,
     symbol: String,
@@ -2058,14 +2094,14 @@ fun CategoryGridBox(
                 RoundedCornerShape(18.dp)
             )
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = color)
+        shape = RoundedCornerShape(32.dp),
+        colors = CardDefaults.cardColors(containerColor = if (LocalIsDarkMode.current) Color(0xFF1E293B) else Color.White)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(12.dp),
-            verticalArrangement = Arrangement.SpaceBetween
+verticalArrangement = Arrangement.SpaceBetween
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -2081,7 +2117,7 @@ fun CategoryGridBox(
                 ) {
                     Text(
                         text = symbol,
-                        color = Color(0xFF1E293B),
+                        color = if (LocalIsDarkMode.current) Color.White else Color.Black,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         fontFamily = FontFamily.Monospace
@@ -2090,7 +2126,7 @@ fun CategoryGridBox(
 
                 Text(
                     text = "$count Notes",
-                    color = Color(0xFF64748B),
+                    color = (if (LocalIsDarkMode.current) Color(0xCCFFFFFF) else Color(0xAA000000)),
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold
                 )
@@ -2099,14 +2135,14 @@ fun CategoryGridBox(
             Column {
                 Text(
                     text = title,
-                    color = Color(0xFF1E293B),
+                    color = if (LocalIsDarkMode.current) Color.White else Color.Black,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Bold
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = desc,
-                    color = Color(0xFF64748B),
+                    color = (if (LocalIsDarkMode.current) Color(0xCCFFFFFF) else Color(0xAA000000)),
                     fontSize = 9.sp,
                     lineHeight = 11.sp,
                     maxLines = 2,
@@ -2119,7 +2155,9 @@ fun CategoryGridBox(
 
 // --- Note List Row item featuring side-by-side COPY button ---
 @Composable
+
 fun NoteListRowItem(
+    index: Int = 0,
     note: NoteEntity,
     onSelect: () -> Unit,
     onFavoriteClick: () -> Unit,
@@ -2129,29 +2167,32 @@ fun NoteListRowItem(
     isSelected: Boolean = false,
     onToggleSelect: () -> Unit = {}
 ) {
-    // Determine background color based on Note Theme properties
+    val isDark = LocalIsDarkMode.current
     val containerBg = when (note.themeType) {
-        "MINT_GLASS" -> Color(0xFFE6F4EA)
-        "SUNSET" -> Color(0xFFFFF4E5)
-        "CHERRY" -> Color(0xFFFCE8E6)
-        "NEON_BLUE" -> Color(0xFFE8F0FE)
-        else -> Color.White // Elegant white card
+        "MINT_GLASS" -> if (isDark) Color(0xFF064E3B).copy(alpha = 0.4f) else Color(0xFFECFDF5)
+        "SUNSET" -> if (isDark) Color(0xFF7C2D12).copy(alpha = 0.4f) else Color(0xFFFFFBEB)
+        "CHERRY" -> if (isDark) Color(0xFF881337).copy(alpha = 0.4f) else Color(0xFFFFF1F2)
+        "NEON_BLUE" -> if (isDark) Color(0xFF1E3A8A).copy(alpha = 0.4f) else Color(0xFFEFF6FF)
+        else -> if (isDark) Color(0xFF1E293B) else Color.White
     }
-
     val glowBorderColor = when (note.themeType) {
-        "MINT_GLASS" -> Color(0xFF34C759).copy(alpha = 0.3f)
-        "SUNSET" -> Color(0xFFFF9500).copy(alpha = 0.3f)
-        "CHERRY" -> Color(0xFFFF2D55).copy(alpha = 0.3f)
-        "NEON_BLUE" -> Color(0xFF007AFF).copy(alpha = 0.3f)
-        else -> Color(0xFFE2E8F0)
+        "MINT_GLASS" -> if (isDark) Color(0xFF10B981) else Color(0xFFA7F3D0)
+        "SUNSET" -> if (isDark) Color(0xFFF59E0B) else Color(0xFFFDE68A)
+        "CHERRY" -> if (isDark) Color(0xFFF43F5E) else Color(0xFFFECDD3)
+        "NEON_BLUE" -> if (isDark) Color(0xFF3B82F6) else Color(0xFFBFDBFE)
+        else -> if (isDark) Color(0xFF334155) else Color(0xFFE2E8F0)
     }
-
+    val entryState = remember { androidx.compose.animation.core.MutableTransitionState(false) }.apply { targetState = true }
+    androidx.compose.animation.AnimatedVisibility(
+        visibleState = entryState,
+        enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.expandVertically()
+    ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(20.dp))
             .background(containerBg)
-            .border(1.5.dp, if (isSelected) Color(0xFF2563EB) else glowBorderColor, RoundedCornerShape(16.dp))
+            .border(1.dp, if (isSelected) Color(0xFF2563EB) else glowBorderColor, RoundedCornerShape(20.dp))
             .clickable {
                 if (isSelectionModeActive) {
                     onToggleSelect()
@@ -2159,7 +2200,8 @@ fun NoteListRowItem(
                     onSelect()
                 }
             }
-            .padding(12.dp),
+            .padding(20.dp),
+            
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (isSelectionModeActive) {
@@ -2186,8 +2228,8 @@ fun NoteListRowItem(
 
                 Text(
                     text = note.title,
-                    color = Color(0xFF1E293B),
-                    fontSize = 15.sp,
+                    color = if (LocalIsDarkMode.current) Color.White else Color(0xFF0F172A),
+                    fontSize = 16.sp,
                     fontWeight = FontWeight.Bold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -2206,8 +2248,8 @@ fun NoteListRowItem(
 
             Text(
                 text = bodyText,
-                color = Color(0xFF64748B),
-                fontSize = 12.sp,
+                color = if (LocalIsDarkMode.current) Color(0xFF94A3B8) else Color(0xFF64748B),
+                fontSize = 13.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = if (isBlurActive) Modifier.blur(2.dp) else Modifier
@@ -2239,14 +2281,14 @@ fun NoteListRowItem(
         Box(
             modifier = Modifier
                 .clip(RoundedCornerShape(12.dp))
-                .background(Color(0xFFF1F5F9))
+                .background(Color(0x12FFFFFF))
                 .border(1.dp, Color(0xFFE2E8F0), RoundedCornerShape(12.dp))
                 .clickable(onClick = onCopyClick)
                 .padding(horizontal = 10.dp, vertical = 8.dp)
         ) {
             Text(
                 "Copy",
-                color = Color(0xFF1E293B),
+                color = if (LocalIsDarkMode.current) Color.White else Color.Black,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.SemiBold
             )
@@ -2267,6 +2309,7 @@ fun NoteListRowItem(
             )
         }
     }
+}
 }
 
 sealed class NotePart {
@@ -2373,13 +2416,13 @@ fun NoteViewScreenSection(
         "SUNSET" -> Color(0xFFE65100)
         "CHERRY" -> Color(0xFFC62828)
         "NEON_BLUE" -> Color(0xFF1565C0)
-        else -> Color(0xFF94A3B8)
+        else -> Color(0xAAFFFFFF)
     }
 
-    val isDark = viewModel.isDarkMode
-    val viewBg = if (isDark) Color(0xFF0F172A) else Color(0xFFF8FAFC)
+    val isDark = LocalIsDarkMode.current
+    val viewBg = if (isDark) Color(0xFF0F172A) else if (LocalIsDarkMode.current) Color(0xFF0F172A) else Color(0xFFF8FAFC)
     val cardBg = if (isDark) Color(0xFF1E293B) else Color.White
-    val textColor = if (isDark) Color(0xFFF8FAFC) else Color(0xFF1E293B)
+    val textColor = if (isDark) Color.White else Color(0xFF1E293B)
     val borderColor = if (isDark) Color(0xFF334155) else Color(0xFFE2E8F0)
 
     Box(
@@ -2437,9 +2480,9 @@ fun NoteViewScreenSection(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = cardBg),
-                border = BorderStroke(1.dp, borderColor)
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(containerColor = if (isDark) Color(0xFF1E293B) else Color.White),
+                border = BorderStroke(1.dp, if (isDark) Color(0xFF334155) else Color(0xFFE2E8F0))
             ) {
                 Column(
                     modifier = Modifier
@@ -2476,7 +2519,7 @@ fun NoteViewScreenSection(
                         val formattedDate = android.text.format.DateFormat.format("MMM dd, yyyy - hh:mm a", note.updatedAt).toString()
                         Text(
                             text = formattedDate,
-                            color = Color(0xFF94A3B8),
+                            color = Color(0xAAFFFFFF),
                             fontSize = 11.sp
                         )
 
@@ -2497,7 +2540,7 @@ fun NoteViewScreenSection(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(12.dp))
-                            .background(Color(0xFFF1F5F9))
+                            .background(Color(0x12FFFFFF))
                             .padding(6.dp),
                         horizontalArrangement = Arrangement.SpaceEvenly,
                         verticalAlignment = Alignment.CenterVertically
@@ -2514,13 +2557,13 @@ fun NoteViewScreenSection(
                                 Icon(
                                     imageVector = Icons.Default.Lock,
                                     contentDescription = "Lock State Toggle",
-                                    tint = if (note.isLocked) Color(0xFFFF9500) else Color(0xFF64748B),
+                                    tint = if (note.isLocked) Color(0xFFFF9500) else (if (LocalIsDarkMode.current) Color(0xCCFFFFFF) else Color(0xAA000000)),
                                     modifier = Modifier.size(16.dp)
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
                                     text = if (note.isLocked) "Unlock" else "Lock",
-                                    color = if (note.isLocked) Color(0xFFFF9500) else Color(0xFF1E293B),
+                                    color = if (note.isLocked) Color(0xFFFF9500) else Color.White,
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -2537,16 +2580,11 @@ fun NoteViewScreenSection(
                             }
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Default.Share,
-                                    contentDescription = "Export Note",
-                                    tint = Color(0xFF2563EB),
-                                    modifier = Modifier.size(16.dp)
-                                )
+                                DynamicImageOrIcon("share", androidx.compose.material.icons.Icons.Default.Share, "Export", modifier = Modifier.size(16.dp), tint = Color(0xFF2563EB))
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
                                     text = "Export",
-                                    color = Color(0xFF1E293B),
+                                    color = if (LocalIsDarkMode.current) Color.White else Color.Black,
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -2563,12 +2601,7 @@ fun NoteViewScreenSection(
                             }
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Default.Delete,
-                                    contentDescription = "Delete Note",
-                                    tint = Color(0xFFEF4444),
-                                    modifier = Modifier.size(16.dp)
-                                )
+                                DynamicImageOrIcon("delete", androidx.compose.material.icons.Icons.Default.Delete, "Delete", modifier = Modifier.size(16.dp), tint = Color(0xFFEF4444))
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
                                     text = "Delete",
@@ -2588,8 +2621,8 @@ fun NoteViewScreenSection(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(200.dp)
-                                .clip(RoundedCornerShape(16.dp))
-                                .background(Color(0xFFF1F5F9))
+                                .clip(RoundedCornerShape(32.dp))
+                                .background(Color(0x12FFFFFF))
                                 .padding(4.dp)
                         ) {
                             AsyncImage(
@@ -2606,13 +2639,13 @@ fun NoteViewScreenSection(
                     note.filePath?.let { filePath ->
                         Card(
                             modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.cardColors(containerColor = Color(0xFFF8FAFC)),
-                            border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
-                            shape = RoundedCornerShape(12.dp)
+                            colors = CardDefaults.cardColors(containerColor = if (LocalIsDarkMode.current) Color(0xFF1E293B) else Color.White),
+                            border = BorderStroke(1.dp, if (LocalIsDarkMode.current) Color(0xFF334155) else Color(0xFFE2E8F0)),
+                            shape = RoundedCornerShape(32.dp)
                         ) {
                             Row(
                                 modifier = Modifier.padding(12.dp),
-                                verticalAlignment = Alignment.CenterVertically
+verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text("📎 Attached Asset", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF475569))
                             }
@@ -2629,7 +2662,7 @@ fun NoteViewScreenSection(
                                     androidx.compose.foundation.text.selection.SelectionContainer {
                                         Text(
                                             text = SyntaxHighlighter.highlightRichText(part.text),
-                                            color = Color(0xFF1E293B),
+                                            color = if (LocalIsDarkMode.current) Color.White else Color.Black,
                                             fontSize = 16.sp,
                                             lineHeight = 22.sp
                                         )
@@ -2641,9 +2674,9 @@ fun NoteViewScreenSection(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .padding(vertical = 8.dp),
-                                    shape = RoundedCornerShape(12.dp),
-                                    colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B)),
-                                    border = BorderStroke(1.dp, Color(0xFF00FFCC).copy(alpha = 0.4f))
+                                    shape = RoundedCornerShape(32.dp),
+                                    colors = CardDefaults.cardColors(containerColor = if (LocalIsDarkMode.current) Color(0xFF1E293B) else Color.White),
+                                    border = BorderStroke(1.dp, if (LocalIsDarkMode.current) Color(0xFF334155) else Color(0xFFE2E8F0))
                                 ) {
                                     Column(modifier = Modifier.padding(12.dp)) {
                                         Row(
@@ -2675,7 +2708,7 @@ fun NoteViewScreenSection(
                                         Text(
                                             text = part.text,
                                             fontSize = 13.sp,
-                                            color = Color.White,
+                                            color = if (LocalIsDarkMode.current) Color.White else Color.Black,
                                             fontFamily = FontFamily.Monospace,
                                             modifier = Modifier.padding(horizontal = 4.dp)
                                         )
@@ -2704,7 +2737,7 @@ fun NoteViewScreenSection(
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
                     ) {
-                        Text("Delete", color = Color.White)
+                        Text("Delete", color = if (LocalIsDarkMode.current) Color.White else Color.Black)
                     }
                 },
                 dismissButton = {
@@ -2727,9 +2760,9 @@ fun NoteViewScreenSection(
                     modifier = Modifier
                         .fillMaxWidth(0.95f)
                         .fillMaxHeight(0.75f),
-                    shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B)),
-                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.15f))
+                    shape = RoundedCornerShape(32.dp),
+                    colors = CardDefaults.cardColors(containerColor = if (LocalIsDarkMode.current) Color(0xFF1E293B) else Color.White),
+                    border = BorderStroke(1.dp, if (LocalIsDarkMode.current) Color(0xFF334155) else Color(0xFFE2E8F0)),
                 ) {
                     Column(
                         modifier = Modifier
@@ -2742,7 +2775,7 @@ fun NoteViewScreenSection(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("Export Document & Share", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                            Text("Export Document & Share", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = if (LocalIsDarkMode.current) Color.White else Color.Black)
                             IconButton(onClick = { isExportOpen = false }) {
                                 Icon(Icons.Default.Close, "Close Panel", tint = Color.LightGray)
                             }
@@ -2755,7 +2788,7 @@ fun NoteViewScreenSection(
                             value = exportFilename,
                             onValueChange = { exportFilename = it },
                             label = { Text("Filename", color = Color.LightGray) },
-                            textStyle = TextStyle(color = Color.White),
+                            textStyle = TextStyle(color = if (LocalIsDarkMode.current) Color.White else Color.Black),
                             modifier = Modifier.fillMaxWidth(),
                             colors = OutlinedTextFieldDefaults.colors(
                                 focusedBorderColor = Color(0xFF00FFCC),
@@ -2789,9 +2822,9 @@ fun NoteViewScreenSection(
                                             previousExports = updated
                                         }
                                     },
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E293B)),
-                                    border = BorderStroke(1.dp, Color(0xFF00FFCC)),
-                                    shape = RoundedCornerShape(8.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color.White),
+                                    border = BorderStroke(1.dp, if (LocalIsDarkMode.current) Color(0xFF334155) else Color(0xFFE2E8F0)),
+                                    shape = RoundedCornerShape(32.dp),
                                     modifier = Modifier.weight(1f)
                                 ) {
                                     Text(ext.uppercase(), color = Color(0xFF00FFCC), fontSize = 12.sp, fontWeight = FontWeight.Bold)
@@ -2815,7 +2848,7 @@ fun NoteViewScreenSection(
                             modifier = Modifier.fillMaxWidth(),
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB))
                         ) {
-                            Text("Share Note Directly", color = Color.White)
+                            Text("Share Note Directly", color = if (LocalIsDarkMode.current) Color.White else Color.Black)
                         }
 
                         Spacer(modifier = Modifier.height(12.dp))
@@ -2853,37 +2886,11 @@ fun NoteEditorScreenSection(
     var id by remember { mutableStateOf(note?.id ?: 0) }
     var title by remember { mutableStateOf(note?.title ?: "") }
     
-    val copyBlocksList = remember(note) {
-        val list = androidx.compose.runtime.mutableStateListOf<String>()
-        val text = note?.content ?: ""
-        val regex = Regex("<copy>(.*?)</copy>", RegexOption.DOT_MATCHES_ALL)
-        regex.findAll(text).forEach { match ->
-            val inner = match.groups[1]?.value?.trim() ?: ""
-            if (inner.isNotEmpty()) {
-                list.add(inner)
-            }
-        }
-        list
-    }
-
     var contentValue by remember(note) {
-        val raw = note?.content ?: ""
-        val clean = raw.replace(Regex("<copy>.*?</copy>", RegexOption.DOT_MATCHES_ALL), "").trim()
-        mutableStateOf(TextFieldValue(clean))
+        mutableStateOf(TextFieldValue(note?.content ?: ""))
     }
     
-    val combinedContentText = remember(contentValue.text, copyBlocksList.toList()) {
-        buildString {
-            append(contentValue.text.trim())
-            copyBlocksList.forEach { block ->
-                if (block.isNotBlank()) {
-                    append("\n\n<copy>\n")
-                    append(block.trim())
-                    append("\n</copy>")
-                }
-            }
-        }.trim()
-    }
+    val combinedContentText = contentValue.text
 
     var selectedFid by remember { mutableStateOf(note?.folderId ?: -1) }
 
@@ -2926,16 +2933,13 @@ fun NoteEditorScreenSection(
         val currentText = contentValue.text
         val oldText = lastSavedValueForUndo.text
         if (currentText != oldText) {
-            val diff = Math.abs(currentText.length - oldText.length)
-            val hasSpace = currentText.endsWith(" ") || currentText.endsWith("\n")
-            if (diff >= 3 || hasSpace) {
-                if (undoStack.size >= 50) {
-                    undoStack.removeAt(0)
-                }
-                undoStack.add(lastSavedValueForUndo)
-                redoStack.clear() // typing clears redo history
-                lastSavedValueForUndo = contentValue
+            kotlinx.coroutines.delay(500)
+            if (undoStack.size >= 50) {
+                undoStack.removeAt(0)
             }
+            undoStack.add(lastSavedValueForUndo)
+            redoStack.clear() // typing clears redo history
+            lastSavedValueForUndo = contentValue
         }
     }
 
@@ -2944,53 +2948,42 @@ fun NoteEditorScreenSection(
     var isUnderlineActive by remember { mutableStateOf(false) }
     var isGlowActive by remember { mutableStateOf(false) }
     var selectedFontSize by remember { mutableStateOf(14) }
-    var selectedFontColor by remember { mutableStateOf(Color(0xFF1E293B)) }
-
-    // Copy Box Dialog States
-    var isCopyBoxInputOpen by remember { mutableStateOf(false) }
-    var copyBoxInputText by remember { mutableStateOf("") }
+    var selectedFontColor by remember { mutableStateOf(Color.White) }
 
     fun handleStyleToggle(style: String, targetActive: Boolean) {
         val text = contentValue.text
         val start = contentValue.selection.start
         val end = contentValue.selection.end
         
-        val openTag = when (style) {
-            "B" -> "<b>"
-            "I" -> "<i>"
-            "U" -> "<u>"
-            "G" -> "<g>"
-            "COPY" -> "<copy>"
-            else -> ""
-        }
-        val closeTag = when (style) {
-            "B" -> "</b>"
-            "I" -> "</i>"
-            "U" -> "</u>"
-            "G" -> "</g>"
-            "COPY" -> "</copy>"
+        val tag = when (style) {
+            "B" -> "**"
+            "I" -> "*"
+            "U" -> "_"
+            "S" -> "~~"
             else -> ""
         }
         
+        if (tag.isEmpty()) return
+
         if (start != end) {
             val selectedText = text.substring(start, end)
-            val newText = text.substring(0, start) + openTag + selectedText + closeTag + text.substring(end)
+            val newText = text.substring(0, start) + tag + selectedText + tag + text.substring(end)
             contentValue = TextFieldValue(
                 text = newText,
-                selection = androidx.compose.ui.text.TextRange(start + openTag.length + selectedText.length + closeTag.length)
+                selection = androidx.compose.ui.text.TextRange(start + tag.length + selectedText.length + tag.length)
             )
         } else {
             if (targetActive) {
-                val newText = text.substring(0, start) + openTag + closeTag + text.substring(start)
+                val newText = text.substring(0, start) + tag + tag + text.substring(start)
                 contentValue = TextFieldValue(
                     text = newText,
-                    selection = androidx.compose.ui.text.TextRange(start + openTag.length)
+                    selection = androidx.compose.ui.text.TextRange(start + tag.length)
                 )
             } else {
-                if (start <= text.length - closeTag.length && text.substring(start, start + closeTag.length) == closeTag) {
+                if (start >= tag.length && start <= text.length - tag.length && text.substring(start - tag.length, start) == tag && text.substring(start, start + tag.length) == tag) {
                     contentValue = TextFieldValue(
                         text = text,
-                        selection = androidx.compose.ui.text.TextRange(start + closeTag.length)
+                        selection = androidx.compose.ui.text.TextRange(start + tag.length)
                     )
                 }
             }
@@ -3144,13 +3137,13 @@ fun NoteEditorScreenSection(
         "SUNSET" -> Color(0xFFE65100)
         "CHERRY" -> Color(0xFFC62828)
         "NEON_BLUE" -> Color(0xFF1565C0)
-        else -> Color(0xFF94A3B8)
+        else -> Color(0xAAFFFFFF)
     }
 
-    val isDark = viewModel.isDarkMode
-    val editorBg = if (isDark) Color(0xFF0F172A) else Color(0xFFF8FAFC)
+    val isDark = LocalIsDarkMode.current
+    val editorBg = Color.Transparent
     val cardBg = if (isDark) Color(0xFF1E293B) else Color.White
-    val textColor = if (isDark) Color(0xFFF8FAFC) else Color(0xFF1E293B)
+    val textColor = if (isDark) Color.White else Color(0xFF1E293B)
     val borderColor = if (isDark) Color(0xFF334155) else Color(0xFFE2E8F0)
 
     Box(
@@ -3159,6 +3152,7 @@ fun NoteEditorScreenSection(
             .background(editorBg)
             .statusBarsPadding()
             .navigationBarsPadding()
+            .imePadding()
     ) {
         Column(
             modifier = Modifier
@@ -3186,7 +3180,7 @@ fun NoteEditorScreenSection(
                     Icon(
                         imageVector = Icons.Default.ArrowBack,
                         contentDescription = "Undo",
-                        tint = if (canUndo) textColor else Color(0xFF64748B)
+                        tint = if (canUndo) textColor else (if (LocalIsDarkMode.current) Color(0xCCFFFFFF) else Color(0xAA000000))
                     )
                 }
 
@@ -3200,26 +3194,8 @@ fun NoteEditorScreenSection(
                     Icon(
                         imageVector = Icons.Default.ArrowForward,
                         contentDescription = "Redo",
-                        tint = if (canRedo) textColor else Color(0xFF64748B)
+                        tint = if (canRedo) textColor else (if (LocalIsDarkMode.current) Color(0xCCFFFFFF) else Color(0xAA000000))
                     )
-                }
-
-                IconButton(onClick = { isFavorite = !isFavorite }) {
-                    Icon(
-                        imageVector = Icons.Default.Star,
-                        contentDescription = "Starred toggle",
-                        tint = if (isFavorite) Color(0xFFFFCC00) else Color(0xFF64748B)
-                    )
-                }
-
-                IconButton(onClick = { isExportOpen = true }) {
-                    Icon(Icons.Default.Share, "Export document", tint = textColor)
-                }
-
-                if (note != null && note.id != 0) {
-                    IconButton(onClick = { onDelete(note) }) {
-                        Icon(Icons.Default.Delete, "Move to trash", tint = Color.Red)
-                    }
                 }
 
                 Spacer(modifier = Modifier.width(4.dp))
@@ -3229,10 +3205,10 @@ fun NoteEditorScreenSection(
                         onSave(id, title, combinedContentText, selectedFid, isFavorite, themeType, attachmentImagePath, attachmentFilePathState, reminderTime, reminderTone, manualTypeOverride)
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB), contentColor = Color.White),
-                    shape = RoundedCornerShape(10.dp),
+                    shape = RoundedCornerShape(32.dp),
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                 ) {
-                    Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
+                    DynamicImageOrIcon("save", androidx.compose.material.icons.Icons.Default.Check, "Save", modifier = Modifier.size(16.dp), tint = if (LocalIsDarkMode.current) Color.White else Color.Black)
                     Spacer(modifier = Modifier.width(4.dp))
                     Text("Save", fontWeight = FontWeight.Bold, fontSize = 13.sp)
                 }
@@ -3246,21 +3222,20 @@ fun NoteEditorScreenSection(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = cardBg),
-            border = BorderStroke(1.dp, borderColor)
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(containerColor = if (isDark) Color(0xFF1E293B) else Color.White),
+            border = BorderStroke(1.dp, if (isDark) Color(0xFF334155) else Color(0xFFE2E8F0))
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(12.dp)
-                    .verticalScroll(rememberScrollState())
             ) {
                 // Title
                 OutlinedTextField(
                     value = title,
                     onValueChange = { title = it },
-                    placeholder = { Text("Title", fontSize = 20.sp, color = Color(0xFF94A3B8)) },
+                    placeholder = { Text("Title", fontSize = 20.sp, color = if (isDark) Color(0xFF64748B) else Color(0xFF94A3B8)) },
                     modifier = Modifier.fillMaxWidth(),
                     textStyle = TextStyle(color = textColor, fontSize = 24.sp, fontWeight = FontWeight.Bold),
                     singleLine = true,
@@ -3280,7 +3255,7 @@ fun NoteEditorScreenSection(
                 Text(
                     text = "$currentDate  |  ${contentValue.text.length} characters",
                     fontSize = 12.sp,
-                    color = Color(0xFF64748B),
+                    color = (if (LocalIsDarkMode.current) Color(0xCCFFFFFF) else Color(0xAA000000)),
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
                 )
 
@@ -3293,50 +3268,13 @@ fun NoteEditorScreenSection(
                         .padding(vertical = 4.dp)
                 )
 
-                // Folders Assign Dropdown (Only if folders exist, and without Unsorted)
-                if (folders.isNotEmpty()) {
-                    // Ensure a valid default is selected if not already
-                    LaunchedEffect(folders, selectedFid) {
-                        if (selectedFid == -1 && folders.isNotEmpty()) {
-                            selectedFid = folders.first().id
-                        }
-                    }
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 8.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text("Category Folder:", color = Color(0xFF64748B), fontSize = 12.sp)
-                        
-                        Row(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(Color(0xFFF1F5F9))
-                                .padding(horizontal = 10.dp, vertical = 6.dp)
-                                .clickable {
-                                    val fArray = folders.map { it.id }
-                                    if (fArray.isNotEmpty()) {
-                                        val nextIdx = (fArray.indexOf(selectedFid) + 1) % fArray.size
-                                        selectedFid = fArray[nextIdx]
-                                    }
-                                },
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            val currentFolderName = folders.find { it.id == selectedFid }?.name ?: folders.firstOrNull()?.name ?: ""
-                            Text(currentFolderName, color = Color(0xFF1E293B), fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Icon(Icons.Default.ArrowDropDown, null, tint = Color(0xFF1E293B), modifier = Modifier.size(14.dp))
-                        }
-                    }
-                }
+                // Removed Folders Assign Dropdown
 
                 // Dynamic Type/Mode Selector
                 val detectedType = AutoSortDetector.detectType(title, contentValue.text)
                 Text(
                     text = "Mode/Classification Mode:",
-                    color = Color(0xFF64748B),
+                    color = (if (LocalIsDarkMode.current) Color(0xCCFFFFFF) else Color(0xAA000000)),
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(top = 8.dp)
@@ -3351,7 +3289,7 @@ fun NoteEditorScreenSection(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     val types = listOf(
-                        Triple("NORMAL", "📝 Normal", Color(0xFF64748B)),
+                        Triple("NORMAL", "📝 Normal", (if (LocalIsDarkMode.current) Color(0xCCFFFFFF) else Color(0xAA000000))),
                         Triple("API", "🗝 API Key", Color(0xFFFF9500)),
                         Triple("CODE", "💻 Code", Color(0xFF34C759)),
                         Triple("VIDEO", "🎥 Video", Color(0xFF007AFF)),
@@ -3363,11 +3301,11 @@ fun NoteEditorScreenSection(
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(8.dp))
-                                .background(if (isSelected) color.copy(alpha = 0.15f) else Color(0xFFF1F5F9))
+                                .background(if (isSelected) color.copy(alpha = 0.15f) else Color(0x12FFFFFF))
                                 .border(
                                     width = 1.dp,
                                     color = if (isSelected) color else Color.Transparent,
-                                    shape = RoundedCornerShape(8.dp)
+                                    shape = RoundedCornerShape(32.dp)
                                 )
                                 .clickable {
                                     manualTypeOverride = typeKey
@@ -3404,9 +3342,9 @@ fun NoteEditorScreenSection(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(vertical = 8.dp),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color.White),
-                        border = BorderStroke(1.dp, Color(0xFFE2E8F0))
+                        shape = RoundedCornerShape(32.dp),
+                        colors = CardDefaults.cardColors(containerColor = if (LocalIsDarkMode.current) Color(0xFF1E293B) else Color.White),
+                        border = BorderStroke(1.dp, if (LocalIsDarkMode.current) Color(0xFF334155) else Color(0xFFE2E8F0)),
                     ) {
                         Column(modifier = Modifier.padding(12.dp)) {
                             Row(
@@ -3494,7 +3432,7 @@ fun NoteEditorScreenSection(
                                     Box(
                                         modifier = Modifier
                                             .clip(RoundedCornerShape(20.dp))
-                                            .background(if (isSelected) Color(0xFF2563EB) else Color(0xFFF1F5F9))
+                                            .background(if (isSelected) Color(0xFF2563EB) else Color(0x12FFFFFF))
                                             .clickable { imageCropRatio = ratio }
                                             .padding(horizontal = 10.dp, vertical = 6.dp)
                                     ) {
@@ -3513,7 +3451,7 @@ fun NoteEditorScreenSection(
                             // Interactive controls
                             Column {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text("Zoom / Size:", fontSize = 10.sp, color = Color(0xFF64748B), modifier = Modifier.width(70.dp))
+                                    Text("Zoom / Size:", fontSize = 10.sp, color = (if (LocalIsDarkMode.current) Color(0xCCFFFFFF) else Color(0xAA000000)), modifier = Modifier.width(70.dp))
                                     Slider(
                                         value = imageScale,
                                         onValueChange = { imageScale = it },
@@ -3521,10 +3459,10 @@ fun NoteEditorScreenSection(
                                         modifier = Modifier.weight(1f),
                                         colors = SliderDefaults.colors(thumbColor = Color(0xFF3B82F6), activeTrackColor = Color(0xFF3B82F6))
                                     )
-                                    Text(String.format("%.1fx", imageScale), fontSize = 10.sp, color = Color(0xFF64748B), modifier = Modifier.width(30.dp))
+                                    Text(String.format("%.1fx", imageScale), fontSize = 10.sp, color = (if (LocalIsDarkMode.current) Color(0xCCFFFFFF) else Color(0xAA000000)), modifier = Modifier.width(30.dp))
                                 }
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text("Position X:", fontSize = 10.sp, color = Color(0xFF64748B), modifier = Modifier.width(70.dp))
+                                    Text("Position X:", fontSize = 10.sp, color = (if (LocalIsDarkMode.current) Color(0xCCFFFFFF) else Color(0xAA000000)), modifier = Modifier.width(70.dp))
                                     Slider(
                                         value = imageOffsetX,
                                         onValueChange = { imageOffsetX = it },
@@ -3532,10 +3470,10 @@ fun NoteEditorScreenSection(
                                         modifier = Modifier.weight(1f),
                                         colors = SliderDefaults.colors(thumbColor = Color(0xFF10B981), activeTrackColor = Color(0xFF10B981))
                                     )
-                                    Text(String.format("%.0fp", imageOffsetX), fontSize = 10.sp, color = Color(0xFF64748B), modifier = Modifier.width(30.dp))
+                                    Text(String.format("%.0fp", imageOffsetX), fontSize = 10.sp, color = (if (LocalIsDarkMode.current) Color(0xCCFFFFFF) else Color(0xAA000000)), modifier = Modifier.width(30.dp))
                                 }
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text("Position Y:", fontSize = 10.sp, color = Color(0xFF64748B), modifier = Modifier.width(70.dp))
+                                    Text("Position Y:", fontSize = 10.sp, color = (if (LocalIsDarkMode.current) Color(0xCCFFFFFF) else Color(0xAA000000)), modifier = Modifier.width(70.dp))
                                     Slider(
                                         value = imageOffsetY,
                                         onValueChange = { imageOffsetY = it },
@@ -3543,7 +3481,7 @@ fun NoteEditorScreenSection(
                                         modifier = Modifier.weight(1f),
                                         colors = SliderDefaults.colors(thumbColor = Color(0xFF10B981), activeTrackColor = Color(0xFF10B981))
                                     )
-                                    Text(String.format("%.0fp", imageOffsetY), fontSize = 10.sp, color = Color(0xFF64748B), modifier = Modifier.width(30.dp))
+                                    Text(String.format("%.0fp", imageOffsetY), fontSize = 10.sp, color = (if (LocalIsDarkMode.current) Color(0xCCFFFFFF) else Color(0xAA000000)), modifier = Modifier.width(30.dp))
                                 }
                             }
                         }
@@ -3559,15 +3497,15 @@ fun NoteEditorScreenSection(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(vertical = 8.dp),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFFEFF6FF)),
-                        border = BorderStroke(1.dp, Color(0xFFBFDBFE))
+                        shape = RoundedCornerShape(32.dp),
+                        colors = CardDefaults.cardColors(containerColor = if (LocalIsDarkMode.current) Color(0xFF1E293B) else Color.White),
+                        border = BorderStroke(1.dp, if (LocalIsDarkMode.current) Color(0xFF334155) else Color(0xFFE2E8F0)),
                     ) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
+verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Row(
@@ -3583,7 +3521,7 @@ fun NoteEditorScreenSection(
                                     ) {
                                         Text(
                                             text = if (isPlayingAudio) "⏸" else "▶",
-                                            color = Color.White,
+                                            color = if (LocalIsDarkMode.current) Color.White else Color.Black,
                                             fontSize = 14.sp
                                         )
                                     }
@@ -3625,9 +3563,9 @@ fun NoteEditorScreenSection(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(vertical = 6.dp),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFFEFF6FF)),
-                        border = BorderStroke(1.dp, Color(0xFFBFDBFE))
+                        shape = RoundedCornerShape(32.dp),
+                        colors = CardDefaults.cardColors(containerColor = if (LocalIsDarkMode.current) Color(0xFF1E293B) else Color.White),
+                        border = BorderStroke(1.dp, if (LocalIsDarkMode.current) Color(0xFF334155) else Color(0xFFE2E8F0)),
                     ) {
                         Column(modifier = Modifier.padding(12.dp)) {
                             Row(
@@ -3660,7 +3598,7 @@ fun NoteEditorScreenSection(
                             }
                             Spacer(modifier = Modifier.height(6.dp))
                             androidx.compose.foundation.text.selection.SelectionContainer {
-                                Text(aiSuggestions, color = Color(0xFF1E293B), fontSize = 12.sp, modifier = Modifier.clickable {
+                                Text(aiSuggestions, color = if (LocalIsDarkMode.current) Color.White else Color.Black, fontSize = 12.sp, modifier = Modifier.clickable {
                                     // Make tapping text also append suggestion for complete convenience!
                                     val currentText = contentValue.text
                                     val isEndSpace = currentText.endsWith(" ") || currentText.isEmpty()
@@ -3688,62 +3626,6 @@ fun NoteEditorScreenSection(
                     fontFamily = if (detectedType == "CODE") FontFamily.Monospace else FontFamily.Default,
                     lineHeight = (selectedFontSize + 4).sp
                 )
-
-                val isCursorInsideCopy = remember(contentValue.text, contentValue.selection.start) {
-                    isCursorInCopyBlock(contentValue.text, contentValue.selection.start)
-                }
-                if (isCursorInsideCopy) {
-                    val currentCopyText = getCurrentCopyBlockText(contentValue.text, contentValue.selection.start)
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp),
-                        shape = RoundedCornerShape(10.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B)),
-                        border = BorderStroke(1.dp, Color(0xFF00FFCC).copy(alpha = 0.5f))
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 10.dp, vertical = 6.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text("📋", fontSize = 14.sp)
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = "LIVE COPY BOX PREVIEW",
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF00FFCC)
-                                )
-                            }
-                            Button(
-                                onClick = {
-                                    clipboardManager.setText(AnnotatedString(currentCopyText))
-                                    com.example.util.CopySoundPlayer.playClickSound(context)
-                                    Toast.makeText(context, "Copied current box text!", Toast.LENGTH_SHORT).show()
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00FFCC)),
-                                shape = RoundedCornerShape(6.dp),
-                                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                                modifier = Modifier.height(28.dp)
-                            ) {
-                                Text("Copy", color = Color.Black, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                            }
-                        }
-                        if (currentCopyText.isNotEmpty()) {
-                            Text(
-                                text = currentCopyText,
-                                color = Color.White,
-                                fontSize = 12.sp,
-                                fontFamily = FontFamily.Monospace,
-                                modifier = Modifier.padding(start = 10.dp, end = 10.dp, bottom = 8.dp)
-                            )
-                        }
-                    }
-                }
 
                 // Highlighting implementation with manual caching state wrapping for zero-lag typing
                 val isHighlightEnabled = viewModel.isSyntaxHighlightingEnabled
@@ -3775,89 +3657,20 @@ fun NoteEditorScreenSection(
                 OutlinedTextField(
                     value = contentValue,
                     onValueChange = { contentValue = it },
-                    placeholder = { Text("Write your APIs, Code lines, links or personal diaries here...", color = Color(0xFF94A3B8)) },
-                    modifier = Modifier.fillMaxWidth(),
+                    placeholder = { Text("Write your APIs, Code lines, links or personal diaries here...", color = if (isDark) Color(0xFF64748B) else Color(0xFF94A3B8)) },
+                    modifier = Modifier.fillMaxWidth().weight(1f),
                     textStyle = textStyle,
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = Color.Transparent,
                         unfocusedBorderColor = Color.Transparent,
                         focusedContainerColor = Color.Transparent,
                         unfocusedContainerColor = Color.Transparent,
-                        focusedTextColor = Color(0xFF1E293B),
-                        unfocusedTextColor = Color(0xFF1E293B)
+                        focusedTextColor = if (LocalIsDarkMode.current) Color.White else Color.Black,
+                        unfocusedTextColor = if (LocalIsDarkMode.current) Color.White else Color.Black
                     ),
                     visualTransformation = visualTransformer
                 )
 
-                // --- DEDICATED CLIPBOARD COPY BOXES SECTION (PRISTINE TAG-FREE EDITING) ---
-                if (copyBlocksList.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(24.dp))
-                    Text(
-                        text = "📋 ACTIVE CLIPBOARD COPY BOXES",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF2563EB),
-                        letterSpacing = 1.1.sp
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    copyBlocksList.forEachIndexed { idx, blockText ->
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 6.dp),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = CardDefaults.cardColors(containerColor = Color(0xFFF8FAFC)),
-                            border = BorderStroke(1.dp, Color(0xFFE2E8F0))
-                        ) {
-                            Column(modifier = Modifier.padding(12.dp)) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Text("📦", fontSize = 14.sp)
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text(
-                                            text = "Clipboard Box #${idx + 1}",
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = Color(0xFF475569)
-                                        )
-                                    }
-                                    IconButton(
-                                        onClick = { copyBlocksList.removeAt(idx) },
-                                        modifier = Modifier.size(24.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Delete,
-                                            contentDescription = "Remove Box",
-                                            tint = Color.Red,
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                    }
-                                }
-                                Spacer(modifier = Modifier.height(6.dp))
-                                OutlinedTextField(
-                                    value = blockText,
-                                    onValueChange = { copyBlocksList[idx] = it },
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .heightIn(min = 80.dp),
-                                    textStyle = TextStyle(fontSize = 13.sp, fontFamily = FontFamily.Monospace, color = Color(0xFF1E293B)),
-                                    placeholder = { Text("Type copyable text smoothly here...", color = Color(0xFF94A3B8), fontSize = 12.sp) },
-                                    colors = OutlinedTextFieldDefaults.colors(
-                                        focusedBorderColor = Color(0xFF2563EB),
-                                        unfocusedBorderColor = Color(0xFFE2E8F0),
-                                        focusedContainerColor = Color.White,
-                                        unfocusedContainerColor = Color.White
-                                    )
-                                )
-                            }
-                        }
-                    }
-                }
             }
         }
 
@@ -3866,9 +3679,9 @@ fun NoteEditorScreenSection(
             Dialog(onDismissRequest = { isInlineCopilotOpen = false }) {
                 Card(
                     modifier = Modifier.fillMaxWidth(0.95f),
-                    shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.White),
-                    border = BorderStroke(1.dp, Color(0xFFE2E8F0))
+                    shape = RoundedCornerShape(32.dp),
+                    colors = CardDefaults.cardColors(containerColor = if (LocalIsDarkMode.current) Color(0xFF1E293B) else Color.White),
+                    border = BorderStroke(1.dp, if (LocalIsDarkMode.current) Color(0xFF334155) else Color(0xFFE2E8F0)),
                 ) {
                     Column(
                         modifier = Modifier
@@ -3880,23 +3693,23 @@ fun NoteEditorScreenSection(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("🪄 AI Copilot Draft", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1E293B))
+                            Text("🪄 AI Copilot Draft", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = if (LocalIsDarkMode.current) Color.White else Color.Black)
                             IconButton(onClick = { isInlineCopilotOpen = false }) {
                                 Icon(Icons.Default.Close, null, modifier = Modifier.size(18.dp))
                             }
                         }
 
                         Spacer(modifier = Modifier.height(10.dp))
-                        Text("Instruct the AI to draft paragraphs, complete codes, create tables, or generate lists here:", fontSize = 11.sp, color = Color(0xFF64748B))
+                        Text("Instruct the AI to draft paragraphs, complete codes, create tables, or generate lists here:", fontSize = 11.sp, color = (if (LocalIsDarkMode.current) Color(0xCCFFFFFF) else Color(0xAA000000)))
                         Spacer(modifier = Modifier.height(12.dp))
 
                         val coroutineScope = rememberCoroutineScope()
                         OutlinedTextField(
                             value = copilotPrompt,
                             onValueChange = { copilotPrompt = it },
-                            placeholder = { Text("e.g., Write a 3-column table comparing PostgreSQL and Room...", color = Color(0xFF94A3B8), fontSize = 12.sp) },
+                            placeholder = { Text("e.g., Write a 3-column table comparing PostgreSQL and Room...", color = Color(0xAAFFFFFF), fontSize = 12.sp) },
                             modifier = Modifier.fillMaxWidth().height(90.dp),
-                            textStyle = TextStyle(fontSize = 13.sp, color = Color(0xFF1E293B)),
+                            textStyle = TextStyle(fontSize = 13.sp, color = if (LocalIsDarkMode.current) Color.White else Color.Black),
                             colors = OutlinedTextFieldDefaults.colors(
                                 focusedBorderColor = Color(0xFF6366F1),
                                 unfocusedBorderColor = Color(0xFFCBD5E1)
@@ -3937,12 +3750,12 @@ fun NoteEditorScreenSection(
                         ) {
                             if (isCopilotLoading) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                    CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Color.White, strokeWidth = 2.dp)
+                                    CircularProgressIndicator(modifier = Modifier.size(16.dp), color = if (LocalIsDarkMode.current) Color.White else Color.Black, strokeWidth = 2.dp)
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text("Generative drafting...", fontSize = 12.sp)
                                 }
                             } else {
-                                Text("🪄 Generate and Insert directly", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                Text("🪄 Generate and Insert directly", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (LocalIsDarkMode.current) Color.White else Color.Black)
                             }
                         }
                     }
@@ -3953,9 +3766,9 @@ fun NoteEditorScreenSection(
     if (isAttachmentTypeChooserOpen) {
         Dialog(onDismissRequest = { isAttachmentTypeChooserOpen = false }) {
             Card(
-                shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
-                border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                shape = RoundedCornerShape(32.dp),
+                colors = CardDefaults.cardColors(containerColor = if (LocalIsDarkMode.current) Color(0xFF1E293B) else Color.White),
+                border = BorderStroke(1.dp, if (LocalIsDarkMode.current) Color(0xFF334155) else Color(0xFFE2E8F0)),
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(16.dp)
@@ -3966,14 +3779,14 @@ fun NoteEditorScreenSection(
                 ) {
                     Text(
                         text = "📎 Choose Attachment Type",
-                        color = Color(0xFF1E293B),
+                        color = if (LocalIsDarkMode.current) Color.White else Color.Black,
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold
                     )
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
                         text = "Import photos or generic documents/audio clips from internal storage",
-                        color = Color(0xFF64748B),
+                        color = (if (LocalIsDarkMode.current) Color(0xCCFFFFFF) else Color(0xAA000000)),
                         fontSize = 11.sp,
                         textAlign = androidx.compose.ui.text.style.TextAlign.Center
                     )
@@ -3986,9 +3799,9 @@ fun NoteEditorScreenSection(
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp)
+                        shape = RoundedCornerShape(32.dp)
                     ) {
-                        Text("📸 Select Photo (Image / Screenshot)", color = Color.White, fontSize = 12.sp)
+                        Text("📸 Select Photo (Image / Screenshot)", color = if (LocalIsDarkMode.current) Color.White else Color.Black, fontSize = 12.sp)
                     }
 
                     Spacer(modifier = Modifier.height(10.dp))
@@ -4000,9 +3813,9 @@ fun NoteEditorScreenSection(
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp)
+                        shape = RoundedCornerShape(32.dp)
                     ) {
-                        Text("📄 Attach Document (PDF, Audio, File)", color = Color.White, fontSize = 12.sp)
+                        Text("📄 Attach Document (PDF, Audio, File)", color = if (LocalIsDarkMode.current) Color.White else Color.Black, fontSize = 12.sp)
                     }
 
                     Spacer(modifier = Modifier.height(10.dp))
@@ -4014,9 +3827,9 @@ fun NoteEditorScreenSection(
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6366F1)),
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp)
+                        shape = RoundedCornerShape(32.dp)
                     ) {
-                        Text("🪄 AI Copilot (Gen Drafts & Coding)", color = Color.White, fontSize = 12.sp)
+                        Text("🪄 AI Copilot (Gen Drafts & Coding)", color = if (LocalIsDarkMode.current) Color.White else Color.Black, fontSize = 12.sp)
                     }
 
                     Spacer(modifier = Modifier.height(10.dp))
@@ -4024,7 +3837,7 @@ fun NoteEditorScreenSection(
                     TextButton(
                         onClick = { isAttachmentTypeChooserOpen = false }
                     ) {
-                        Text("Cancel", color = Color(0xFF64748B), fontSize = 12.sp)
+                        Text("Cancel", color = (if (LocalIsDarkMode.current) Color(0xCCFFFFFF) else Color(0xAA000000)), fontSize = 12.sp)
                     }
                 }
             }
@@ -4042,11 +3855,11 @@ fun NoteEditorScreenSection(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(vertical = 4.dp),
-            shape = RoundedCornerShape(16.dp),
+            shape = RoundedCornerShape(32.dp),
             colors = CardDefaults.cardColors(
-                containerColor = if (viewModel.isDarkMode) Color(0xFF1E293B) else Color.White
+                containerColor = if (LocalIsDarkMode.current) Color(0xFF1E293B) else Color.White
             ),
-            border = BorderStroke(1.dp, if (viewModel.isDarkMode) Color(0xFF334155) else Color(0xFFE2E8F0))
+            border = BorderStroke(1.dp, if (LocalIsDarkMode.current) Color(0xFF334155) else Color(0xFFE2E8F0))
         ) {
             Row(
                 modifier = Modifier
@@ -4067,7 +3880,7 @@ fun NoteEditorScreenSection(
                         text = "Aa",
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
-                        color = if (viewModel.isDarkMode) Color.White else Color(0xFF1E293B)
+                        color = if (LocalIsDarkMode.current) Color.White else Color.Black
                     )
                 }
 
@@ -4083,7 +3896,7 @@ fun NoteEditorScreenSection(
                         text = "≡",
                         fontSize = 20.sp,
                         fontWeight = FontWeight.Bold,
-                        color = if (viewModel.isDarkMode) Color.White else Color(0xFF1E293B)
+                        color = if (LocalIsDarkMode.current) Color.White else Color.Black
                     )
                 }
 
@@ -4105,7 +3918,7 @@ fun NoteEditorScreenSection(
                     Text(
                         text = "☑",
                         fontSize = 18.sp,
-                        color = if (viewModel.isDarkMode) Color.White else Color(0xFF1E293B)
+                        color = if (LocalIsDarkMode.current) Color.White else Color.Black
                     )
                 }
 
@@ -4117,10 +3930,7 @@ fun NoteEditorScreenSection(
                     },
                     modifier = Modifier.size(36.dp)
                 ) {
-                    Text(
-                        text = "⏰",
-                        fontSize = 18.sp
-                    )
+                    DynamicImageOrIcon("alarm", androidx.compose.material.icons.Icons.Default.Notifications, "Alarm", modifier = Modifier.size(24.dp), tint = if (LocalIsDarkMode.current) Color.White else Color.Black)
                 }
 
                 // 5. Image Attachment (🖼)
@@ -4131,10 +3941,7 @@ fun NoteEditorScreenSection(
                     },
                     modifier = Modifier.size(36.dp)
                 ) {
-                    Text(
-                        text = "🖼",
-                        fontSize = 18.sp
-                    )
+                    DynamicImageOrIcon("album", androidx.compose.material.icons.Icons.Default.Add, "Album", modifier = Modifier.size(24.dp), tint = if (LocalIsDarkMode.current) Color.White else Color.Black)
                 }
 
                 // 6. Voice AU Bot Command (🎙)
@@ -4167,7 +3974,7 @@ fun NoteEditorScreenSection(
                         Icon(
                             imageVector = Icons.Default.MoreVert,
                             contentDescription = "More tools",
-                            tint = if (viewModel.isDarkMode) Color.White else Color(0xFF1E293B)
+                            tint = if (LocalIsDarkMode.current) Color.White else Color.Black
                         )
                     }
 
@@ -4179,19 +3986,9 @@ fun NoteEditorScreenSection(
                             text = { Text("📊 Insert Table") },
                             onClick = {
                                 isMoreMenuOpen = false
-                                val tableSnippet = "\n\n| Header 1 | Header 2 |\n| --- | --- |\n| Row 1 Col 1 | Row 1 Col 2 |\n| Row 2 Col 1 | Row 2 Col 2 |\n\n"
+                                val tableSnippet = "\n\n| Header 1 | Header 2 | Header 3 |\n| -------- | -------- | -------- |\n| Cell 1   | Cell 2   | Cell 3   |\n| Cell 4   | Cell 5   | Cell 6   |\n\n"
                                 val newText = contentValue.text + tableSnippet
                                 contentValue = TextFieldValue(newText, TextRange(newText.length))
-                                com.example.util.CopySoundPlayer.playClickSound(context)
-                            }
-                        )
-
-                        DropdownMenuItem(
-                            text = { Text("📋 Insert Copy Box") },
-                            onClick = {
-                                isMoreMenuOpen = false
-                                copyBlocksList.add("")
-                                Toast.makeText(context, "New Clipboard Box Created!", Toast.LENGTH_SHORT).show()
                                 com.example.util.CopySoundPlayer.playClickSound(context)
                             }
                         )
@@ -4212,12 +4009,13 @@ fun NoteEditorScreenSection(
         if (isTextStylesSheetOpen) {
             ModalBottomSheet(
                 onDismissRequest = { isTextStylesSheetOpen = false },
-                containerColor = if (viewModel.isDarkMode) Color(0xFF1E293B) else Color.White
+                containerColor = if (LocalIsDarkMode.current) Color(0xFF1E293B) else Color.White
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(20.dp)
+                        .verticalScroll(rememberScrollState())
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -4228,13 +4026,13 @@ fun NoteEditorScreenSection(
                             text = "Text styles",
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold,
-                            color = if (viewModel.isDarkMode) Color.White else Color(0xFF1E293B)
+                            color = if (LocalIsDarkMode.current) Color.White else Color.Black
                         )
                         IconButton(onClick = { isTextStylesSheetOpen = false }) {
                             Icon(
                                 imageVector = Icons.Default.Close,
                                 contentDescription = "Close",
-                                tint = if (viewModel.isDarkMode) Color.White else Color(0xFF1E293B)
+                                tint = if (LocalIsDarkMode.current) Color.White else Color.Black
                             )
                         }
                     }
@@ -4252,14 +4050,14 @@ fun NoteEditorScreenSection(
                             modifier = Modifier
                                 .size(44.dp)
                                 .clip(RoundedCornerShape(10.dp))
-                                .background(if (isBoldActive) Color(0xFF2563EB) else (if (viewModel.isDarkMode) Color(0xFF334155) else Color(0xFFF1F5F9)))
+                                .background(if (isBoldActive) Color(0xFF2563EB) else (if (LocalIsDarkMode.current) Color(0x26FFFFFF) else Color(0x12FFFFFF)))
                                 .clickable {
                                     isBoldActive = !isBoldActive
                                     handleStyleToggle("B", isBoldActive)
                                 },
                             contentAlignment = Alignment.Center
                         ) {
-                            Text("B", fontWeight = FontWeight.Black, fontSize = 18.sp, color = if (isBoldActive) Color.White else (if (viewModel.isDarkMode) Color.White else Color(0xFF1E293B)))
+                            Text("B", fontWeight = FontWeight.Black, fontSize = 18.sp, color = if (isBoldActive) Color.White else (if (LocalIsDarkMode.current) Color.White else Color.Black))
                         }
 
                         // Italic
@@ -4267,14 +4065,14 @@ fun NoteEditorScreenSection(
                             modifier = Modifier
                                 .size(44.dp)
                                 .clip(RoundedCornerShape(10.dp))
-                                .background(if (isItalicActive) Color(0xFF2563EB) else (if (viewModel.isDarkMode) Color(0xFF334155) else Color(0xFFF1F5F9)))
+                                .background(if (isItalicActive) Color(0xFF2563EB) else (if (LocalIsDarkMode.current) Color(0x26FFFFFF) else Color(0x12FFFFFF)))
                                 .clickable {
                                     isItalicActive = !isItalicActive
                                     handleStyleToggle("I", isItalicActive)
                                 },
                             contentAlignment = Alignment.Center
                         ) {
-                            Text("I", fontStyle = FontStyle.Italic, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = if (isItalicActive) Color.White else (if (viewModel.isDarkMode) Color.White else Color(0xFF1E293B)))
+                            Text("I", fontStyle = FontStyle.Italic, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = if (isItalicActive) Color.White else (if (LocalIsDarkMode.current) Color.White else Color.Black))
                         }
 
                         // Underline
@@ -4282,14 +4080,14 @@ fun NoteEditorScreenSection(
                             modifier = Modifier
                                 .size(44.dp)
                                 .clip(RoundedCornerShape(10.dp))
-                                .background(if (isUnderlineActive) Color(0xFF2563EB) else (if (viewModel.isDarkMode) Color(0xFF334155) else Color(0xFFF1F5F9)))
+                                .background(if (isUnderlineActive) Color(0xFF2563EB) else (if (LocalIsDarkMode.current) Color(0x26FFFFFF) else Color(0x12FFFFFF)))
                                 .clickable {
                                     isUnderlineActive = !isUnderlineActive
                                     handleStyleToggle("U", isUnderlineActive)
                                 },
                             contentAlignment = Alignment.Center
                         ) {
-                            Text("U", textDecoration = TextDecoration.Underline, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = if (isUnderlineActive) Color.White else (if (viewModel.isDarkMode) Color.White else Color(0xFF1E293B)))
+                            Text("U", textDecoration = TextDecoration.Underline, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = if (isUnderlineActive) Color.White else (if (LocalIsDarkMode.current) Color.White else Color.Black))
                         }
 
                         // Strikethrough
@@ -4297,13 +4095,13 @@ fun NoteEditorScreenSection(
                             modifier = Modifier
                                 .size(44.dp)
                                 .clip(RoundedCornerShape(10.dp))
-                                .background(if (viewModel.isDarkMode) Color(0xFF334155) else Color(0xFFF1F5F9))
+                                .background(if (LocalIsDarkMode.current) Color(0x26FFFFFF) else Color(0x12FFFFFF))
                                 .clickable {
                                     handleStyleToggle("S", true)
                                 },
                             contentAlignment = Alignment.Center
                         ) {
-                            Text("S", textDecoration = TextDecoration.LineThrough, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = if (viewModel.isDarkMode) Color.White else Color(0xFF1E293B))
+                            Text("S", textDecoration = TextDecoration.LineThrough, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = if (LocalIsDarkMode.current) Color.White else Color.Black)
                         }
 
                         // Glow
@@ -4311,7 +4109,7 @@ fun NoteEditorScreenSection(
                             modifier = Modifier
                                 .size(44.dp)
                                 .clip(RoundedCornerShape(10.dp))
-                                .background(if (isGlowActive) Color(0xFF10B981) else (if (viewModel.isDarkMode) Color(0xFF334155) else Color(0xFFF1F5F9)))
+                                .background(if (isGlowActive) Color(0xFF10B981) else (if (LocalIsDarkMode.current) Color(0x26FFFFFF) else Color(0x12FFFFFF)))
                                 .clickable {
                                     isGlowActive = !isGlowActive
                                     handleStyleToggle("G", isGlowActive)
@@ -4328,47 +4126,33 @@ fun NoteEditorScreenSection(
                         text = "Font Size",
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = Color(0xFF94A3B8)
+                        color = Color(0xAAFFFFFF)
                     )
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    val fontSizes = listOf(12, 14, 16, 18, 20, 24, 32, 40)
-                    LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        items(fontSizes) { sz ->
-                            Box(
-                                modifier = Modifier
-                                    .size(40.dp)
-                                    .clip(CircleShape)
-                                    .background(if (selectedFontSize == sz) Color(0xFF2563EB) else (if (viewModel.isDarkMode) Color(0xFF334155) else Color(0xFFF1F5F9)))
-                                    .clickable {
-                                        selectedFontSize = sz
-                                        val text = contentValue.text
-                                        val start = contentValue.selection.start
-                                        val end = contentValue.selection.end
-                                        val openTag = "<size sp=\"$sz\">"
-                                        val closeTag = "</size>"
-                                        if (start != end) {
-                                            val selected = text.substring(start, end)
-                                            val newText = text.substring(0, start) + openTag + selected + closeTag + text.substring(end)
-                                            contentValue = TextFieldValue(newText, TextRange(start + openTag.length + selected.length + closeTag.length))
-                                        } else {
-                                            val newText = text.substring(0, start) + openTag + closeTag + text.substring(start)
-                                            contentValue = TextFieldValue(newText, TextRange(start + openTag.length))
-                                        }
-                                    },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = "$sz",
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (selectedFontSize == sz) Color.White else (if (viewModel.isDarkMode) Color.White else Color(0xFF1E293B))
-                                )
-                            }
-                        }
+                        Slider(
+                            value = selectedFontSize.toFloat(),
+                            onValueChange = { selectedFontSize = it.toInt() },
+                            valueRange = 10f..30f,
+                            steps = 20,
+                            modifier = Modifier.weight(1f),
+                            colors = SliderDefaults.colors(
+                                thumbColor = Color(0xFF2563EB),
+                                activeTrackColor = Color(0xFF2563EB)
+                            )
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            text = "${selectedFontSize}pt",
+                            color = if (LocalIsDarkMode.current) Color.White else Color.Black,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.width(40.dp)
+                        )
                     }
 
                     Spacer(modifier = Modifier.height(20.dp))
@@ -4377,67 +4161,37 @@ fun NoteEditorScreenSection(
                         text = "Font Color",
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = Color(0xFF94A3B8)
+                        color = Color(0xAAFFFFFF)
                     )
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    val colorPalette = listOf(
-                        Color(0xFF1E293B),
-                        Color(0xFFFFFFFF),
-                        Color(0xFFEF4444),
-                        Color(0xFFF97316),
-                        Color(0xFFEAB308),
-                        Color(0xFF22C55E),
-                        Color(0xFF3B82F6),
-                        Color(0xFFA855F7)
-                    )
-
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                        horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        colorPalette.forEach { color ->
-                            val hexStr = String.format("#%06X", (0xFFFFFF and color.toArgb()))
-                            val isSelected = selectedFontColor == color
+                        val colors = listOf(
+                            if (LocalIsDarkMode.current) Color.White else Color.Black,
+                            Color(0xFFEF4444), // Red
+                            Color(0xFFF59E0B), // Orange
+                            Color(0xFF10B981), // Green
+                            Color(0xFF3B82F6), // Blue
+                            Color(0xFF8B5CF6)  // Purple
+                        )
+
+                        colors.forEach { col ->
                             Box(
                                 modifier = Modifier
-                                    .size(36.dp)
+                                    .size(40.dp)
                                     .clip(CircleShape)
-                                    .background(color)
+                                    .background(col)
                                     .border(
-                                        width = if (isSelected) 3.dp else 1.dp,
-                                        color = if (isSelected) Color(0xFF2563EB) else Color(0xFFCBD5E1),
-                                        shape = CircleShape
+                                        2.dp,
+                                        if (selectedFontColor == col) Color(0xFF2563EB) else Color.Transparent,
+                                        CircleShape
                                     )
-                                    .clickable {
-                                        selectedFontColor = color
-                                        val text = contentValue.text
-                                        val start = contentValue.selection.start
-                                        val end = contentValue.selection.end
-                                        val openTag = "<color hex=\"$hexStr\">"
-                                        val closeTag = "</color>"
-                                        if (start != end) {
-                                            val selected = text.substring(start, end)
-                                            val newText = text.substring(0, start) + openTag + selected + closeTag + text.substring(end)
-                                            contentValue = TextFieldValue(newText, TextRange(start + openTag.length + selected.length + closeTag.length))
-                                        } else {
-                                            val newText = text.substring(0, start) + openTag + closeTag + text.substring(start)
-                                            contentValue = TextFieldValue(newText, TextRange(start + openTag.length))
-                                        }
-                                    },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                if (isSelected) {
-                                    Icon(
-                                        imageVector = Icons.Default.Check,
-                                        contentDescription = "Selected",
-                                        tint = if (color == Color.White) Color.Black else Color.White,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
-                            }
+                                    .clickable { selectedFontColor = col }
+                            )
                         }
                     }
 
@@ -4450,12 +4204,13 @@ fun NoteEditorScreenSection(
         if (isParagraphStylesSheetOpen) {
             ModalBottomSheet(
                 onDismissRequest = { isParagraphStylesSheetOpen = false },
-                containerColor = if (viewModel.isDarkMode) Color(0xFF1E293B) else Color.White
+                containerColor = if (LocalIsDarkMode.current) Color(0xFF1E293B) else Color.White
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(20.dp)
+                        .verticalScroll(rememberScrollState())
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -4466,13 +4221,13 @@ fun NoteEditorScreenSection(
                             text = "Paragraph style",
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold,
-                            color = if (viewModel.isDarkMode) Color.White else Color(0xFF1E293B)
+                            color = if (LocalIsDarkMode.current) Color.White else Color.Black
                         )
                         IconButton(onClick = { isParagraphStylesSheetOpen = false }) {
                             Icon(
                                 imageVector = Icons.Default.Close,
                                 contentDescription = "Close",
-                                tint = if (viewModel.isDarkMode) Color.White else Color(0xFF1E293B)
+                                tint = if (LocalIsDarkMode.current) Color.White else Color.Black
                             )
                         }
                     }
@@ -4483,7 +4238,7 @@ fun NoteEditorScreenSection(
                         text = "Lists",
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = Color(0xFF94A3B8)
+                        color = Color(0xAAFFFFFF)
                     )
 
                     Spacer(modifier = Modifier.height(8.dp))
@@ -4501,12 +4256,12 @@ fun NoteEditorScreenSection(
                                 isParagraphStylesSheetOpen = false
                             },
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = if (viewModel.isDarkMode) Color(0xFF334155) else Color(0xFFF1F5F9)
+                                containerColor = if (LocalIsDarkMode.current) Color(0x26FFFFFF) else Color(0x12FFFFFF)
                             ),
-                            shape = RoundedCornerShape(10.dp),
+                            shape = RoundedCornerShape(32.dp),
                             modifier = Modifier.weight(1f)
                         ) {
-                            Text("• Bullet List", color = if (viewModel.isDarkMode) Color.White else Color(0xFF1E293B), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Text("• Bullet List", color = if (LocalIsDarkMode.current) Color.White else Color.Black, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                         }
 
                         // Numbered List
@@ -4518,12 +4273,44 @@ fun NoteEditorScreenSection(
                                 isParagraphStylesSheetOpen = false
                             },
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = if (viewModel.isDarkMode) Color(0xFF334155) else Color(0xFFF1F5F9)
+                                containerColor = if (LocalIsDarkMode.current) Color(0x26FFFFFF) else Color(0x12FFFFFF)
                             ),
-                            shape = RoundedCornerShape(10.dp),
+                            shape = RoundedCornerShape(32.dp),
                             modifier = Modifier.weight(1f)
                         ) {
-                            Text("1. Numbered", color = if (viewModel.isDarkMode) Color.White else Color(0xFF1E293B), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Text("1. Numbered", color = if (LocalIsDarkMode.current) Color.White else Color.Black, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Text(
+                        text = "Data Structures",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color(0xAAFFFFFF)
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Button(
+                            onClick = {
+                                val current = contentValue.text
+                                val tableTemplate = "\n| Header 1 | Header 2 | Header 3 |\n| -------- | -------- | -------- |\n| Cell 1   | Cell 2   | Cell 3   |\n| Cell 4   | Cell 5   | Cell 6   |\n"
+                                val newText = current + tableTemplate
+                                contentValue = TextFieldValue(newText, TextRange(newText.length))
+                                isParagraphStylesSheetOpen = false
+                            },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (LocalIsDarkMode.current) Color(0x26FFFFFF) else Color(0x12FFFFFF)
+                            ),
+                            shape = RoundedCornerShape(32.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("⊞ Insert Table", color = if (LocalIsDarkMode.current) Color.White else Color.Black, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                         }
                     }
 
@@ -4537,16 +4324,16 @@ fun NoteEditorScreenSection(
             Dialog(onDismissRequest = { isSetReminderOpen = false }) {
                 Card(
                     modifier = Modifier.fillMaxWidth(0.95f),
-                    shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1E1E)),
-                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.15f))
+                    shape = RoundedCornerShape(32.dp),
+                    colors = CardDefaults.cardColors(containerColor = if (LocalIsDarkMode.current) Color(0xFF1E293B) else Color.White),
+                    border = BorderStroke(1.dp, if (LocalIsDarkMode.current) Color(0xFF334155) else Color(0xFFE2E8F0)),
                 ) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(20.dp)
                     ) {
-                        Text("Configure Local Alert Reminder", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        Text("Configure Local Alert Reminder", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = if (LocalIsDarkMode.current) Color.White else Color.Black)
                         Spacer(modifier = Modifier.height(16.dp))
 
                         Text("Schedule alert timer:", color = Color.LightGray, fontSize = 12.sp)
@@ -4564,9 +4351,9 @@ fun NoteEditorScreenSection(
                                 },
                                 modifier = Modifier.weight(1f),
                                 colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.08f)),
-                                shape = RoundedCornerShape(8.dp)
+                                shape = RoundedCornerShape(32.dp)
                             ) {
-                                Text("In 10m", color = Color.White, fontSize = 11.sp)
+                                Text("In 10m", color = if (LocalIsDarkMode.current) Color.White else Color.Black, fontSize = 11.sp)
                             }
                             Button(
                                 onClick = {
@@ -4575,9 +4362,9 @@ fun NoteEditorScreenSection(
                                 },
                                 modifier = Modifier.weight(1f),
                                 colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.08f)),
-                                shape = RoundedCornerShape(8.dp)
+                                shape = RoundedCornerShape(32.dp)
                             ) {
-                                Text("In 1 Hour", color = Color.White, fontSize = 11.sp)
+                                Text("In 1 Hour", color = if (LocalIsDarkMode.current) Color.White else Color.Black, fontSize = 11.sp)
                             }
                         }
 
@@ -4638,9 +4425,9 @@ fun NoteEditorScreenSection(
                     modifier = Modifier
                         .fillMaxWidth(0.95f)
                         .fillMaxHeight(0.85f),
-                    shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B)),
-                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.15f))
+                    shape = RoundedCornerShape(32.dp),
+                    colors = CardDefaults.cardColors(containerColor = if (LocalIsDarkMode.current) Color(0xFF1E293B) else Color.White),
+                    border = BorderStroke(1.dp, if (LocalIsDarkMode.current) Color(0xFF334155) else Color(0xFFE2E8F0)),
                 ) {
                     Column(
                         modifier = Modifier
@@ -4653,7 +4440,7 @@ fun NoteEditorScreenSection(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("Export Document & Share", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                            Text("Export Document & Share", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = if (LocalIsDarkMode.current) Color.White else Color.Black)
                             IconButton(onClick = { isExportOpen = false }) {
                                 Icon(Icons.Default.Close, "Close Panel", tint = Color.LightGray)
                             }
@@ -4666,7 +4453,7 @@ fun NoteEditorScreenSection(
                             value = exportFilename,
                             onValueChange = { exportFilename = it },
                             label = { Text("Filename", color = Color.LightGray) },
-                            textStyle = TextStyle(color = Color.White),
+                            textStyle = TextStyle(color = if (LocalIsDarkMode.current) Color.White else Color.Black),
                             modifier = Modifier.fillMaxWidth(),
                             trailingIcon = {
                                 Icon(
@@ -4741,7 +4528,7 @@ fun NoteEditorScreenSection(
                                     value = customFileExt,
                                     onValueChange = { customFileExt = it },
                                     modifier = Modifier.weight(1f),
-                                    textStyle = TextStyle(color = Color.White),
+                                    textStyle = TextStyle(color = if (LocalIsDarkMode.current) Color.White else Color.Black),
                                     placeholder = { Text("e.g. cpp, java, md", color = Color.Gray) },
                                     trailingIcon = {
                                         Icon(Icons.Default.Edit, "Pencil", tint = Color(0xFF00FFCC), modifier = Modifier.size(16.dp))
@@ -4763,7 +4550,7 @@ fun NoteEditorScreenSection(
                                         }
                                     },
                                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00FFCC)),
-                                    shape = RoundedCornerShape(8.dp)
+                                    shape = RoundedCornerShape(32.dp)
                                 ) {
                                     Text("Export", color = Color.Black)
                                 }
@@ -4780,8 +4567,8 @@ fun NoteEditorScreenSection(
                             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                 previousExports.forEach { item ->
                                     Card(
-                                        colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.05f)),
-                                        shape = RoundedCornerShape(8.dp),
+                                        colors = CardDefaults.cardColors(containerColor = if (LocalIsDarkMode.current) Color(0xFF1E293B) else Color.White),
+                                        shape = RoundedCornerShape(32.dp),
                                         modifier = Modifier.fillMaxWidth()
                                     ) {
                                         Row(
@@ -4791,7 +4578,7 @@ fun NoteEditorScreenSection(
                                         ) {
                                             Text(
                                                 text = item,
-                                                color = Color.White,
+                                                color = if (LocalIsDarkMode.current) Color.White else Color.Black,
                                                 fontSize = 12.sp,
                                                 fontFamily = FontFamily.Monospace,
                                                 maxLines = 1,
@@ -4838,7 +4625,7 @@ fun NoteEditorScreenSection(
                             modifier = Modifier.fillMaxWidth(),
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB))
                         ) {
-                            Text("Share Note Directly", color = Color.White)
+                            Text("Share Note Directly", color = if (LocalIsDarkMode.current) Color.White else Color.Black)
                         }
 
                         Spacer(modifier = Modifier.height(12.dp))
@@ -4847,95 +4634,6 @@ fun NoteEditorScreenSection(
                             modifier = Modifier.align(Alignment.CenterHorizontally)
                         ) {
                             Text("Dismiss Panel", color = Color.LightGray)
-                        }
-                    }
-                }
-            }
-        }
-
-        // --- Custom Dialog for entering copyable text blocks cleanly ---
-        if (isCopyBoxInputOpen) {
-            Dialog(onDismissRequest = { isCopyBoxInputOpen = false }) {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A)) // Slate dark container
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(20.dp)
-                    ) {
-                        Text(
-                            text = "CREATE COPYABLE BOX",
-                            color = Color(0xFF00FFCC),
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = FontFamily.Monospace,
-                            letterSpacing = 1.1.sp
-                        )
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(
-                            text = "Type text below. In read-view, users can click a single button to copy this box directly.",
-                            color = Color(0xFF94A3B8),
-                            fontSize = 11.sp,
-                            lineHeight = 14.sp
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        
-                        OutlinedTextField(
-                            value = copyBoxInputText,
-                            onValueChange = { copyBoxInputText = it },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(150.dp),
-                            textStyle = TextStyle(color = Color.White, fontSize = 13.sp, fontFamily = FontFamily.Monospace),
-                            placeholder = { Text("Enter copyable snippet or custom text here...", color = Color(0xFF475569), fontSize = 13.sp) },
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = Color(0xFF00FFCC),
-                                unfocusedBorderColor = Color(0xFF334155),
-                                focusedContainerColor = Color(0xFF1E293B),
-                                unfocusedContainerColor = Color(0xFF1E293B)
-                            )
-                        )
-                        
-                        Spacer(modifier = Modifier.height(20.dp))
-                        
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.End,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            TextButton(onClick = { 
-                                isCopyBoxInputOpen = false
-                                copyBoxInputText = ""
-                            }) {
-                                Text("Cancel", color = Color(0xFF94A3B8))
-                            }
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Button(
-                                onClick = {
-                                    if (copyBoxInputText.isNotEmpty()) {
-                                        val openTag = "<copy>\n"
-                                        val closeTag = "\n</copy>"
-                                        val textToInsert = openTag + copyBoxInputText + closeTag
-                                        val currentText = contentValue.text
-                                        val start = contentValue.selection.start
-                                        val newText = currentText.substring(0, start) + textToInsert + currentText.substring(start)
-                                        contentValue = TextFieldValue(
-                                            text = newText,
-                                            selection = androidx.compose.ui.text.TextRange(start + textToInsert.length)
-                                        )
-                                    }
-                                    isCopyBoxInputOpen = false
-                                    copyBoxInputText = ""
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00FFCC))
-                            ) {
-                                Text("Insert Box", color = Color.Black, fontWeight = FontWeight.Bold)
-                            }
                         }
                     }
                 }
@@ -4987,9 +4685,9 @@ fun NameStylizerScreenSection(
         if (aiGeneratedDesigns.isNotEmpty()) aiGeneratedDesigns else presetDesigns
     }
 
-    val isDark = viewModel.isDarkMode
-    val bgColor = if (isDark) Color(0xFF0F172A) else Color(0xFFF8FAFC)
-    val textColor = if (isDark) Color(0xFFF8FAFC) else Color(0xFF1E293B)
+    val isDark = LocalIsDarkMode.current
+    val bgColor = if (isDark) Color(0xFF0F172A) else if (LocalIsDarkMode.current) Color(0xFF0F172A) else Color(0xFFF8FAFC)
+    val textColor = if (isDark) Color.White else Color(0xFF1E293B)
     val cardBg = if (isDark) Color(0xFF1E293B) else Color.White
     val borderColor = if (isDark) Color(0xFF334155) else Color(0xFFE2E8F0)
 
@@ -5017,7 +4715,7 @@ fun NameStylizerScreenSection(
         OutlinedTextField(
             value = inputName,
             onValueChange = { inputName = it },
-            label = { Text("Enter your name", color = Color(0xFF94A3B8)) },
+            label = { Text("Enter your name", color = if (LocalIsDarkMode.current) Color(0xFF94A3B8) else Color(0xFF64748B)) },
             textStyle = TextStyle(color = textColor, fontWeight = FontWeight.Bold, fontSize = 15.sp),
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
@@ -5035,8 +4733,8 @@ fun NameStylizerScreenSection(
         OutlinedTextField(
             value = stylePrompt,
             onValueChange = { stylePrompt = it },
-            label = { Text("Describe your changes / style preferences", color = Color(0xFF94A3B8)) },
-            placeholder = { Text("e.g. Add wings, gothic style, fire symbols, emojis, cool brackets, capital bold", color = Color(0xFF64748B), fontSize = 11.sp) },
+            label = { Text("Describe your changes / style preferences", color = if (LocalIsDarkMode.current) Color(0xFF94A3B8) else Color(0xFF64748B)) },
+            placeholder = { Text("e.g. Add wings, gothic style, fire symbols, emojis, cool brackets, capital bold", color = (if (LocalIsDarkMode.current) Color(0xCCFFFFFF) else Color(0xAA000000)), fontSize = 11.sp) },
             textStyle = TextStyle(color = textColor, fontSize = 13.sp),
             modifier = Modifier.fillMaxWidth(),
             minLines = 2,
@@ -5066,15 +4764,15 @@ fun NameStylizerScreenSection(
                 }
             },
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp),
+            shape = RoundedCornerShape(32.dp),
             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB))
         ) {
             if (isGenerating) {
-                CircularProgressIndicator(modifier = Modifier.size(18.dp), color = Color.White, strokeWidth = 2.dp)
+                CircularProgressIndicator(modifier = Modifier.size(18.dp), color = if (LocalIsDarkMode.current) Color.White else Color.Black, strokeWidth = 2.dp)
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Generating AI Styles...", color = Color.White, fontWeight = FontWeight.Bold)
+                Text("Generating AI Styles...", color = if (LocalIsDarkMode.current) Color.White else Color.Black, fontWeight = FontWeight.Bold)
             } else {
-                Text("✨ Generate AI Stylish Names", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                Text("✨ Generate AI Stylish Names", color = if (LocalIsDarkMode.current) Color.White else Color.Black, fontWeight = FontWeight.Bold, fontSize = 14.sp)
             }
         }
 
@@ -5087,9 +4785,9 @@ fun NameStylizerScreenSection(
             items(displayDesigns) { design ->
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = cardBg),
-                    shape = RoundedCornerShape(12.dp),
-                    border = BorderStroke(1.dp, borderColor)
+                    colors = CardDefaults.cardColors(containerColor = if (LocalIsDarkMode.current) Color(0xFF1E293B) else Color.White),
+                    shape = RoundedCornerShape(32.dp),
+                    border = BorderStroke(1.dp, if (LocalIsDarkMode.current) Color(0xFF334155) else Color(0xFFE2E8F0))
                 ) {
                     Row(
                         modifier = Modifier
@@ -5099,7 +4797,7 @@ fun NameStylizerScreenSection(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
-                            Text(design.first, color = Color(0xFF94A3B8), fontSize = 11.sp)
+                            Text(design.first, color = Color(0xAAFFFFFF), fontSize = 11.sp)
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(design.second, color = textColor, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
                         }
@@ -5111,10 +4809,10 @@ fun NameStylizerScreenSection(
                                 Toast.makeText(context, "Copied stylish name to clipboard!", Toast.LENGTH_SHORT).show()
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
-                            shape = RoundedCornerShape(8.dp),
+                            shape = RoundedCornerShape(32.dp),
                             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                         ) {
-                            Text("Copy", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            DynamicImageOrIcon("copy", androidx.compose.material.icons.Icons.Default.Share, "Copy", modifier = Modifier.size(16.dp), tint = if (LocalIsDarkMode.current) Color.White else Color.Black)
                         }
                     }
                 }
@@ -5125,18 +4823,17 @@ fun NameStylizerScreenSection(
 
 // --- LOCAL STORAGE FILE EXPLORER & EDITOR SCREEN ---
 @Composable
-fun LocalFileExplorerScreenSection(
+fun LocalFileEditorScreenSection(
     onBack: () -> Unit,
+    onOpenFile: (path: String) -> Unit,
     viewModel: NotepadViewModel
 ) {
     val context = LocalContext.current
     var currentDir by remember { mutableStateOf(android.os.Environment.getExternalStorageDirectory() ?: context.filesDir) }
-    var editingFile by remember { mutableStateOf<java.io.File?>(null) }
-    var editingContent by remember { mutableStateOf("") }
-
-    val isDark = viewModel.isDarkMode
-    val bgColor = if (isDark) Color(0xFF0F172A) else Color(0xFFF8FAFC)
-    val textColor = if (isDark) Color(0xFFF8FAFC) else Color(0xFF1E293B)
+    
+    val isDark = LocalIsDarkMode.current
+    val bgColor = if (isDark) Color(0xFF0F172A) else if (LocalIsDarkMode.current) Color(0xFF0F172A) else Color(0xFFF8FAFC)
+    val textColor = if (isDark) Color.White else Color(0xFF1E293B)
     val cardBg = if (isDark) Color(0xFF1E293B) else Color.White
     val borderColor = if (isDark) Color(0xFF334155) else Color(0xFFE2E8F0)
 
@@ -5148,84 +4845,11 @@ fun LocalFileExplorerScreenSection(
         }
     }
 
-    if (editingFile != null) {
-        // IN-APP FILE EDITOR MODE
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(bgColor)
-                .statusBarsPadding()
-                .navigationBarsPadding()
-                .padding(16.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(
-                    modifier = Modifier.weight(1f),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    IconButton(onClick = { editingFile = null }) {
-                        Icon(Icons.Default.ArrowBack, "Back to files", tint = textColor)
-                    }
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Column {
-                        Text(editingFile?.name ?: "File", color = textColor, fontSize = 16.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-                        Text(editingFile?.absolutePath ?: "", color = Color(0xFF94A3B8), fontSize = 10.sp, maxLines = 1)
-                    }
-                }
-
-                Button(
-                    onClick = {
-                        try {
-                            editingFile?.writeText(editingContent)
-                            com.example.util.CopySoundPlayer.playClickSound(context)
-                            Toast.makeText(context, "File saved successfully!", Toast.LENGTH_SHORT).show()
-                        } catch (e: Exception) {
-                            Toast.makeText(context, "Save error: ${e.message}", Toast.LENGTH_SHORT).show()
-                        }
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
-                    shape = RoundedCornerShape(10.dp)
-                ) {
-                    Text("💾 Save File", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                }
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Card(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = cardBg),
-                border = BorderStroke(1.dp, borderColor)
-            ) {
-                OutlinedTextField(
-                    value = editingContent,
-                    onValueChange = { editingContent = it },
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(8.dp),
-                    textStyle = TextStyle(
-                        color = textColor,
-                        fontSize = 13.sp,
-                        fontFamily = FontFamily.Monospace
-                    ),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = Color.Transparent,
-                        unfocusedBorderColor = Color.Transparent
-                    )
-                )
-            }
-        }
-        return
-    }
-
     // FILE EXPLORER BROWSER MODE
+    val isManager = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+        android.os.Environment.isExternalStorageManager()
+    } else true
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -5249,12 +4873,32 @@ fun LocalFileExplorerScreenSection(
             }
             Spacer(modifier = Modifier.width(6.dp))
             Column {
-                Text("📁 Storage File Explorer", color = textColor, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                Text(currentDir.absolutePath, color = Color(0xFF94A3B8), fontSize = 10.sp, maxLines = 1)
+                Text("📁 Storage File Editor", color = textColor, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                Text(currentDir.absolutePath, color = if (LocalIsDarkMode.current) Color(0xFF94A3B8) else Color(0xFF64748B), fontSize = 10.sp, maxLines = 1)
             }
         }
 
         Spacer(modifier = Modifier.height(12.dp))
+
+        if (!isManager) {
+            Button(onClick = {
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                    try {
+                        val intent = android.content.Intent(android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
+                        intent.addCategory("android.intent.category.DEFAULT")
+                        intent.data = android.net.Uri.parse(String.format("package:%s", context.packageName))
+                        context.startActivity(intent)
+                    } catch (e: Exception) {
+                        val intent = android.content.Intent()
+                        intent.action = android.provider.Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION
+                        context.startActivity(intent)
+                    }
+                }
+            }, modifier = Modifier.fillMaxWidth()) {
+                Text("Grant All Files Access Permission")
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+        }
 
         if (fileList.isEmpty()) {
             Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -5274,22 +4918,21 @@ fun LocalFileExplorerScreenSection(
                                     currentDir = file
                                 } else {
                                     try {
-                                        editingContent = file.readText()
-                                        editingFile = file
+                                        onOpenFile(file.absolutePath)
                                     } catch (e: Exception) {
-                                        Toast.makeText(context, "Cannot read file: ${e.message}", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, "Cannot open file: ${e.message}", Toast.LENGTH_SHORT).show()
                                     }
                                 }
                             },
-                        colors = CardDefaults.cardColors(containerColor = cardBg),
-                        shape = RoundedCornerShape(12.dp),
-                        border = BorderStroke(1.dp, borderColor)
+                        colors = CardDefaults.cardColors(containerColor = if (LocalIsDarkMode.current) Color(0xFF1E293B) else Color.White),
+                        shape = RoundedCornerShape(32.dp),
+                        border = BorderStroke(1.dp, if (LocalIsDarkMode.current) Color(0xFF334155) else Color(0xFFE2E8F0))
                     ) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically
+verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
                                 text = if (file.isDirectory) "📁" else when (file.extension.lowercase()) {
@@ -5301,13 +4944,11 @@ fun LocalFileExplorerScreenSection(
                                 fontSize = 20.sp
                             )
                             Spacer(modifier = Modifier.width(12.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(file.name, color = textColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
-                                Text(
-                                    text = if (file.isDirectory) "Folder" else "${file.length() / 1024} KB",
-                                    color = Color(0xFF94A3B8),
-                                    fontSize = 10.sp
-                                )
+                            Column {
+                                Text(file.name, color = textColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                                if (!file.isDirectory) {
+                                    Text("${file.length() / 1024} KB", color = Color.Gray, fontSize = 11.sp)
+                                }
                             }
                         }
                     }
@@ -5317,10 +4958,10 @@ fun LocalFileExplorerScreenSection(
     }
 }
 
-// --- SETTINGS CONFIG DRAWER SCREEN ---
 @Composable
 fun SettingsScreenSection(
     onBack: () -> Unit,
+    onOpenTrash: () -> Unit = {},
     viewModel: NotepadViewModel
 ) {
     val context = LocalContext.current
@@ -5349,10 +4990,10 @@ fun SettingsScreenSection(
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(onClick = onBack) {
-                Icon(Icons.Default.ArrowBack, "Back", tint = Color(0xFF1E293B))
+                Icon(Icons.Default.ArrowBack, "Back", tint = if (LocalIsDarkMode.current) Color.White else Color.Black)
             }
             Spacer(modifier = Modifier.width(8.dp))
-            Text("AuPad Preferences Dashboard", color = Color(0xFF1E293B), fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            Text("AuPad Preferences Dashboard", color = if (LocalIsDarkMode.current) Color.White else Color.Black, fontSize = 18.sp, fontWeight = FontWeight.Bold)
         }
 
         Spacer(modifier = Modifier.height(20.dp))
@@ -5392,14 +5033,14 @@ fun SettingsScreenSection(
         // PIN Setup
         Card(
             modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = Color.White),
-            border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
-            shape = RoundedCornerShape(16.dp)
+            colors = CardDefaults.cardColors(containerColor = if (LocalIsDarkMode.current) Color(0xFF1E293B) else Color.White),
+            border = BorderStroke(1.dp, if (LocalIsDarkMode.current) Color(0xFF334155) else Color(0xFFE2E8F0)),
+            shape = RoundedCornerShape(32.dp)
         ) {
             Column(modifier = Modifier.padding(14.dp)) {
-                Text("APIs Folder / Lock Passcode PIN", color = Color(0xFF1E293B), fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                Text("APIs Folder / Lock Passcode PIN", color = if (LocalIsDarkMode.current) Color.White else Color.Black, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(4.dp))
-                Text("Configure a 4-digit numeric passcode to secure your private notes. (No security questions are saved on the device for maximum privacy protection).", color = Color(0xFF64748B), fontSize = 10.sp)
+                Text("Configure a 4-digit numeric passcode to secure your private notes. (No security questions are saved on the device for maximum privacy protection).", color = (if (LocalIsDarkMode.current) Color(0xCCFFFFFF) else Color(0xAA000000)), fontSize = 10.sp)
                 Spacer(modifier = Modifier.height(10.dp))
 
                 OutlinedTextField(
@@ -5410,15 +5051,15 @@ fun SettingsScreenSection(
                             viewModel.savedPin = it
                         }
                     },
-                    label = { Text("4-digit PIN", color = Color(0xFF94A3B8)) },
-                    textStyle = TextStyle(color = Color(0xFF1E293B)),
+                    label = { Text("4-digit PIN", color = if (LocalIsDarkMode.current) Color(0xFF94A3B8) else Color(0xFF64748B)) },
+                    textStyle = TextStyle(color = if (LocalIsDarkMode.current) Color.White else Color.Black),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth(),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = Color(0xFF2563EB),
                         unfocusedBorderColor = Color(0xFFE2E8F0),
-                        focusedContainerColor = Color(0xFFF1F5F9),
-                        unfocusedContainerColor = Color(0xFFF1F5F9)
+                        focusedContainerColor = Color(0x12FFFFFF),
+                        unfocusedContainerColor = Color(0x12FFFFFF)
                     )
                 )
             }
@@ -5426,113 +5067,60 @@ fun SettingsScreenSection(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        Text("FONTS & TYPOGRAPHY", color = Color(0xFF2563EB), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+        Text("AI ASSISTANT SETTINGS", color = Color(0xFF2563EB), fontSize = 12.sp, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(10.dp))
 
-        // Font Importer Card
-        val fontPickerLauncher = rememberLauncherForActivityResult(
-            contract = ActivityResultContracts.OpenMultipleDocuments()
-        ) { uris ->
-            if (uris.isNotEmpty()) {
-                val dir = java.io.File(context.filesDir, "custom_fonts")
-                if (!dir.exists()) dir.mkdirs()
-                var importedCount = 0
-                uris.forEach { uri ->
-                    val fileName = com.example.util.getFileNameFromUri(context, uri) ?: "font_${System.currentTimeMillis()}.ttf"
-                    try {
-                        context.contentResolver.openInputStream(uri)?.use { inputStream ->
-                            val destFile = java.io.File(dir, fileName)
-                            destFile.outputStream().use { outputStream ->
-                                inputStream.copyTo(outputStream)
-                            }
-                            importedCount++
-                        }
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                    }
-                }
-                if (importedCount > 0) {
-                    Toast.makeText(context, "Successfully imported $importedCount fonts!", Toast.LENGTH_SHORT).show()
-                }
-            }
-        }
+        var isUsingCustomApi by remember { mutableStateOf(viewModel.geminiApiKeyOverride.isNotEmpty()) }
 
         Card(
             modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = Color.White),
-            border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
-            shape = RoundedCornerShape(16.dp)
+            colors = CardDefaults.cardColors(containerColor = if (LocalIsDarkMode.current) Color(0xFF1E293B) else Color.White),
+            border = BorderStroke(1.dp, if (LocalIsDarkMode.current) Color(0xFF334155) else Color(0xFFE2E8F0)),
+            shape = RoundedCornerShape(32.dp)
         ) {
             Column(modifier = Modifier.padding(14.dp)) {
-                Text("Custom Font Importer (.ttf / .otf):", color = Color(0xFF1E293B), fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                Text("API Selection", color = if (LocalIsDarkMode.current) Color.White else Color.Black, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(4.dp))
-                Text("Select multiple TTF/OTF fonts from your storage to use inside Au Notes.", color = Color(0xFF64748B), fontSize = 10.sp)
-                Spacer(modifier = Modifier.height(12.dp))
-
-                Button(
-                    onClick = {
-                        try {
-                            fontPickerLauncher.launch(arrayOf("font/ttf", "font/otf", "application/x-font-ttf", "application/x-font-otf", "*/*"))
-                        } catch (e: Exception) {
-                            Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Text("📥 Select & Import Fonts", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 12.sp)
+                
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    RadioButton(
+                        selected = !isUsingCustomApi,
+                        onClick = {
+                            isUsingCustomApi = false
+                            viewModel.geminiApiKeyOverride = ""
+                            inputKey = ""
+                        },
+                        colors = RadioButtonDefaults.colors(selectedColor = Color(0xFF2563EB))
+                    )
+                    Text("Use Inbuilt API", fontSize = 12.sp, color = if (LocalIsDarkMode.current) Color.White else Color.Black)
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    RadioButton(
+                        selected = isUsingCustomApi,
+                        onClick = { isUsingCustomApi = true },
+                        colors = RadioButtonDefaults.colors(selectedColor = Color(0xFF2563EB))
+                    )
+                    Text("Use Your Own API", fontSize = 12.sp, color = if (LocalIsDarkMode.current) Color.White else Color.Black)
                 }
 
-                val customFonts = remember { mutableStateListOf<java.io.File>() }
-                val reloadFonts = {
-                    val dir = java.io.File(context.filesDir, "custom_fonts")
-                    customFonts.clear()
-                    if (dir.exists()) {
-                        dir.listFiles { file ->
-                            file.extension.equals("ttf", ignoreCase = true) || file.extension.equals("otf", ignoreCase = true)
-                        }?.let { customFonts.addAll(it) }
-                    }
-                }
-
-                LaunchedEffect(Unit) {
-                    reloadFonts()
-                }
-
-                if (customFonts.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Text("Imported Fonts (${customFonts.size}):", color = Color(0xFF1E293B), fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.height(6.dp))
-                    customFonts.forEach { fontFile ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 4.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(Color(0xFFF1F5F9))
-                                .padding(horizontal = 10.dp, vertical = 6.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = fontFile.nameWithoutExtension,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFF1E293B),
-                                fontFamily = com.example.util.loadFontFamily(context, fontFile.name)
-                            )
-                            IconButton(
-                                onClick = {
-                                    fontFile.delete()
-                                    reloadFonts()
-                                    Toast.makeText(context, "Font deleted!", Toast.LENGTH_SHORT).show()
-                                },
-                                modifier = Modifier.size(24.dp)
-                            ) {
-                                Icon(Icons.Default.Delete, "Delete font", tint = Color.Red, modifier = Modifier.size(16.dp))
-                            }
-                        }
-                    }
+                if (isUsingCustomApi) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = inputKey,
+                        onValueChange = { 
+                            inputKey = it
+                            viewModel.geminiApiKeyOverride = it
+                        },
+                        label = { Text("Gemini API Key", color = if (LocalIsDarkMode.current) Color(0xFF94A3B8) else Color(0xFF64748B)) },
+                        textStyle = TextStyle(color = if (LocalIsDarkMode.current) Color.White else Color.Black),
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = Color(0xFF2563EB),
+                            unfocusedBorderColor = Color(0xFFE2E8F0),
+                            focusedContainerColor = Color(0x12FFFFFF),
+                            unfocusedContainerColor = Color(0x12FFFFFF)
+                        )
+                    )
                 }
             }
         }
@@ -5548,7 +5136,7 @@ fun SettingsScreenSection(
             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEF4444)),
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text("Hard Wipe Trash Bin Recycler", color = Color.White)
+            Text("Hard Wipe Trash Bin Recycler", color = if (LocalIsDarkMode.current) Color.White else Color.Black)
         }
 
         Spacer(modifier = Modifier.height(50.dp))
@@ -5556,7 +5144,7 @@ fun SettingsScreenSection(
 }
 
 @Composable
-fun SettingsToggleRow(
+fun SettingsToggleRow( 
     title: String,
     desc: String,
     checked: Boolean,
@@ -5564,9 +5152,9 @@ fun SettingsToggleRow(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
-        shape = RoundedCornerShape(16.dp)
+        colors = CardDefaults.cardColors(containerColor = if (LocalIsDarkMode.current) Color(0xFF1E293B) else Color.White),
+        border = BorderStroke(1.dp, if (LocalIsDarkMode.current) Color(0xFF334155) else Color(0xFFE2E8F0)),
+        shape = RoundedCornerShape(32.dp)
     ) {
         Row(
             modifier = Modifier
@@ -5576,9 +5164,9 @@ fun SettingsToggleRow(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(title, color = Color(0xFF1E293B), fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                Text(title, color = if (LocalIsDarkMode.current) Color.White else Color.Black, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(2.dp))
-                Text(desc, color = Color(0xFF64748B), fontSize = 10.sp, lineHeight = 12.sp)
+                Text(desc, color = (if (LocalIsDarkMode.current) Color(0xCCFFFFFF) else Color(0xAA000000)), fontSize = 10.sp, lineHeight = 12.sp)
             }
             Switch(
                 checked = checked,
@@ -5607,12 +5195,12 @@ fun ContactOptionItem(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(Color.White)
-            .border(1.dp, Color(0xFFE2E8F0), RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(32.dp))
+            .background(Color(0x1AFFFFFF))
+            .border(1.dp, Color(0xFFE2E8F0), RoundedCornerShape(32.dp))
             .clickable(onClick = onClick)
             .padding(12.dp),
-        verticalAlignment = Alignment.CenterVertically
+verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
             modifier = Modifier
@@ -5627,7 +5215,7 @@ fun ContactOptionItem(
             Text(
                 text = iconChar,
                 fontSize = 20.sp,
-                color = Color.White
+                color = if (LocalIsDarkMode.current) Color.White else Color.Black
             )
         }
         
@@ -5638,7 +5226,7 @@ fun ContactOptionItem(
                 text = title,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color(0xFF1E293B)
+                color = if (LocalIsDarkMode.current) Color.White else Color.Black
             )
             Spacer(modifier = Modifier.height(2.dp))
             Text(
@@ -5652,7 +5240,7 @@ fun ContactOptionItem(
         Icon(
             imageVector = Icons.Default.PlayArrow,
             contentDescription = "Navigate Link",
-            tint = Color(0xFF94A3B8),
+            tint = Color(0xAAFFFFFF),
             modifier = Modifier.size(16.dp)
         )
     }
@@ -5746,17 +5334,16 @@ fun AppFeaturesScreenSection(onBack: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(onClick = onBack) {
-                Icon(Icons.Default.ArrowBack, "Back", tint = Color(0xFF1E293B))
+                Icon(Icons.Default.ArrowBack, "Back", tint = if (LocalIsDarkMode.current) Color.White else Color.Black)
             }
             Spacer(modifier = Modifier.width(8.dp))
-            Text("All Main Features of App", color = Color(0xFF1E293B), fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            Text("All Main Features of App", color = if (LocalIsDarkMode.current) Color.White else Color.Black, fontSize = 20.sp, fontWeight = FontWeight.Bold)
         }
 
         Spacer(modifier = Modifier.height(20.dp))
 
         val features = listOf(
             Triple("📝 Zero-Lag Rich Typography Editor", "Optimized with background caching and independent component scrolling. Type long documents, journals, and logs seamlessly without stutter.", Color(0xFF3F51B5)),
-            Triple("⚙️ Live Custom Font Importer", "Import unlimited custom .ttf and .otf files from your device. Personalize your complete writing atmosphere instantly in Settings.", Color(0xFF009688)),
             Triple("🔒 Dynamic Category Folders & PIN Locks", "Create secured categories. Lock sensitive folders with a secret PIN, protected by recovery security questions and developer master overrides.", Color(0xFFE91E63)),
             Triple("🔮 Au AI Smart Assistant Bot", "Embedded with server-side Gemini intelligence. Extract clean code blocks, translate logs, generate layout summaries, and chat instantly.", Color(0xFF9C27B0)),
             Triple("📋 Typographic Copyable Code Boxes", "Insert custom markdown blocks with a dedicated pencil button. Copy snippet boxes in read mode with a single tap.", Color(0xFF00BCD4)),
@@ -5768,9 +5355,9 @@ fun AppFeaturesScreenSection(onBack: () -> Unit) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(vertical = 8.dp),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
-                border = BorderStroke(1.dp, Color(0xFFE2E8F0))
+                shape = RoundedCornerShape(32.dp),
+                colors = CardDefaults.cardColors(containerColor = if (LocalIsDarkMode.current) Color(0xFF1E293B) else Color.White),
+                border = BorderStroke(1.dp, if (LocalIsDarkMode.current) Color(0xFF334155) else Color(0xFFE2E8F0)),
             ) {
                 Row(
                     modifier = Modifier.padding(16.dp),
@@ -5787,9 +5374,9 @@ fun AppFeaturesScreenSection(onBack: () -> Unit) {
                     }
                     Spacer(modifier = Modifier.width(14.dp))
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(title, color = Color(0xFF1E293B), fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                        Text(title, color = if (LocalIsDarkMode.current) Color.White else Color.Black, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                         Spacer(modifier = Modifier.height(4.dp))
-                        Text(desc, color = Color(0xFF64748B), fontSize = 11.sp, lineHeight = 14.sp)
+                        Text(desc, color = (if (LocalIsDarkMode.current) Color(0xCCFFFFFF) else Color(0xAA000000)), fontSize = 11.sp, lineHeight = 14.sp)
                     }
                 }
             }
@@ -5797,36 +5384,20 @@ fun AppFeaturesScreenSection(onBack: () -> Unit) {
     }
 }
 
+// --- DEVELOPER CONTACT PAGE ---
 @Composable
-fun DeveloperContactScreenSection(onBack: () -> Unit) {
+fun DeveloperContactScreenSection(
+    onBack: () -> Unit
+) {
     val context = LocalContext.current
     val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
-
-    var isVisible by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        isVisible = true
-    }
-    val scaleAnim by androidx.compose.animation.core.animateFloatAsState(
-        targetValue = if (isVisible) 1f else 0.94f,
-        animationSpec = androidx.compose.animation.core.tween(durationMillis = 550, easing = androidx.compose.animation.core.FastOutSlowInEasing),
-        label = "contactScale"
-    )
-    val alphaAnim by androidx.compose.animation.core.animateFloatAsState(
-        targetValue = if (isVisible) 1f else 0f,
-        animationSpec = androidx.compose.animation.core.tween(durationMillis = 450),
-        label = "contactAlpha"
-    )
 
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .background(if (LocalIsDarkMode.current) Color(0xFF0F172A) else Color(0xFFF8FAFC))
             .statusBarsPadding()
             .padding(16.dp)
-            .graphicsLayer(
-                scaleX = scaleAnim,
-                scaleY = scaleAnim,
-                alpha = alphaAnim
-            )
             .verticalScroll(rememberScrollState())
     ) {
         Row(
@@ -5834,50 +5405,47 @@ fun DeveloperContactScreenSection(onBack: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(onClick = onBack) {
-                Icon(Icons.Default.ArrowBack, "Back", tint = Color(0xFF1E293B))
+                Icon(Icons.Default.ArrowBack, "Back", tint = if (LocalIsDarkMode.current) Color.White else Color.Black)
             }
             Spacer(modifier = Modifier.width(8.dp))
-            Text("Developer Contact Workspace", color = Color(0xFF1E293B), fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            Text("Developer Contact Workspace", color = if (LocalIsDarkMode.current) Color.White else Color.Black, fontSize = 20.sp, fontWeight = FontWeight.Bold)
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(20.dp))
 
         Card(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White),
-            border = BorderStroke(1.dp, Color(0xFFE2E8F0))
+            colors = CardDefaults.cardColors(containerColor = if (LocalIsDarkMode.current) Color(0xFF1E293B) else Color.White),
+            shape = RoundedCornerShape(32.dp),
+            border = BorderStroke(1.dp, if (LocalIsDarkMode.current) Color(0xFF334155) else Color(0xFFE2E8F0)),
         ) {
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(20.dp),
+                modifier = Modifier.padding(20.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Box(
                     modifier = Modifier
-                        .size(70.dp)
+                        .size(72.dp)
                         .clip(CircleShape)
                         .background(Color(0xFF2563EB).copy(alpha = 0.1f)),
                     contentAlignment = Alignment.Center
                 ) {
                     Text("🧑‍💻", fontSize = 36.sp)
                 }
+                Spacer(modifier = Modifier.height(12.dp))
 
-                Spacer(modifier = Modifier.height(14.dp))
-
-                Text("AuPad Developer Support", color = Color(0xFF1E293B), fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Text("AuPad Developer Support", color = if (LocalIsDarkMode.current) Color.White else Color.Black, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(4.dp))
-                Text("Get assist code, request features, or report vulnerabilities directly.", color = Color(0xFF64748B), fontSize = 11.sp)
+                Text("Get assist code, request features, or report vulnerabilities directly.", color = (if (LocalIsDarkMode.current) Color(0xCCFFFFFF) else Color(0xAA000000)), fontSize = 11.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
 
-                Spacer(modifier = Modifier.height(20.dp))
+                Spacer(modifier = Modifier.height(24.dp))
 
                 // Email Contact Row
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(12.dp))
-                        .background(Color(0xFFF1F5F9))
+                        .background(Color(0x12FFFFFF))
                         .clickable {
                             try {
                                 val intent = android.content.Intent(android.content.Intent.ACTION_SENDTO).apply {
@@ -5893,15 +5461,44 @@ fun DeveloperContactScreenSection(onBack: () -> Unit) {
                         .padding(14.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("📧", fontSize = 18.sp)
+                    DynamicImageOrIcon("gmail", Icons.Default.Email, "Email", modifier = Modifier.size(24.dp), tint = Color(0xFFEA4335))
                     Spacer(modifier = Modifier.width(12.dp))
                     Column(modifier = Modifier.weight(1f)) {
-                        Text("Official Email Address", color = Color(0xFF64748B), fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                        Text("educationaltalks1@gmail.com", color = Color(0xFF1E293B), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Text("Official Email Address", color = (if (LocalIsDarkMode.current) Color(0xCCFFFFFF) else Color(0xAA000000)), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        Text("educationaltalks1@gmail.com", color = if (LocalIsDarkMode.current) Color.White else Color.Black, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
-                    Icon(Icons.Default.PlayArrow, null, tint = Color(0xFF94A3B8), modifier = Modifier.size(14.dp))
+                    Icon(Icons.Default.PlayArrow, null, tint = Color(0xAAFFFFFF), modifier = Modifier.size(14.dp))
                 }
-
+                Spacer(modifier = Modifier.height(10.dp))
+                
+                // Phone Contact Row
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color(0xFFFEF3C7))
+                        .clickable {
+                            try {
+                                val intent = android.content.Intent(android.content.Intent.ACTION_DIAL).apply {
+                                    data = android.net.Uri.parse("tel:+919719124973")
+                                }
+                                context.startActivity(intent)
+                                com.example.util.CopySoundPlayer.playClickSound(context)
+                            } catch (e: Exception) {
+                                Toast.makeText(context, "Phone: +919719124973", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                        .padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    DynamicImageOrIcon("phone", Icons.Default.Phone, "Phone", modifier = Modifier.size(24.dp), tint = Color(0xFFD97706))
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Direct Phone Support", color = (if (LocalIsDarkMode.current) Color(0xCCFFFFFF) else Color(0xAA000000)), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        Text("+919719124973", color = Color(0xFFD97706), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                    Icon(Icons.Default.PlayArrow, null, tint = Color(0xAAFFFFFF), modifier = Modifier.size(14.dp))
+                }
                 Spacer(modifier = Modifier.height(10.dp))
 
                 // Telegram Contact Row
@@ -5921,15 +5518,14 @@ fun DeveloperContactScreenSection(onBack: () -> Unit) {
                         .padding(14.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("✈️", fontSize = 18.sp)
+                    DynamicImageOrIcon("telegram", Icons.Default.Send, "Telegram", modifier = Modifier.size(24.dp), tint = Color(0xFF2563EB))
                     Spacer(modifier = Modifier.width(12.dp))
                     Column(modifier = Modifier.weight(1f)) {
-                        Text("Personal Telegram Account", color = Color(0xFF64748B), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        Text("Personal Telegram Account", color = (if (LocalIsDarkMode.current) Color(0xCCFFFFFF) else Color(0xAA000000)), fontSize = 10.sp, fontWeight = FontWeight.Bold)
                         Text("@she_is_miine", color = Color(0xFF2563EB), fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
-                    Icon(Icons.Default.PlayArrow, null, tint = Color(0xFF94A3B8), modifier = Modifier.size(14.dp))
+                    Icon(Icons.Default.PlayArrow, null, tint = Color(0xAAFFFFFF), modifier = Modifier.size(14.dp))
                 }
-
                 Spacer(modifier = Modifier.height(10.dp))
 
                 // WhatsApp Contact Row
@@ -5949,15 +5545,68 @@ fun DeveloperContactScreenSection(onBack: () -> Unit) {
                         .padding(14.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("💬", fontSize = 18.sp)
+                    DynamicImageOrIcon("whatsapp", Icons.Default.Phone, "WhatsApp", modifier = Modifier.size(24.dp), tint = Color(0xFF16A34A))
                     Spacer(modifier = Modifier.width(12.dp))
                     Column(modifier = Modifier.weight(1f)) {
-                        Text("WhatsApp Support", color = Color(0xFF64748B), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        Text("WhatsApp Support", color = (if (LocalIsDarkMode.current) Color(0xCCFFFFFF) else Color(0xAA000000)), fontSize = 10.sp, fontWeight = FontWeight.Bold)
                         Text("+919719124973", color = Color(0xFF16A34A), fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
-                    Icon(Icons.Default.PlayArrow, null, tint = Color(0xFF94A3B8), modifier = Modifier.size(14.dp))
+                    Icon(Icons.Default.PlayArrow, null, tint = Color(0xAAFFFFFF), modifier = Modifier.size(14.dp))
                 }
+                Spacer(modifier = Modifier.height(10.dp))
 
+                // Instagram Contact Row
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color(0xFFFDF2F8))
+                        .clickable {
+                            try {
+                                uriHandler.openUri("https://instagram.com/she_is_miine")
+                                com.example.util.CopySoundPlayer.playClickSound(context)
+                            } catch (e: Exception) {
+                                Toast.makeText(context, "Instagram: @she_is_miine", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                        .padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    DynamicImageOrIcon("instagram", Icons.Default.Share, "Instagram", modifier = Modifier.size(24.dp), tint = Color(0xFFDB2777))
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Instagram", color = (if (LocalIsDarkMode.current) Color(0xCCFFFFFF) else Color(0xAA000000)), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        Text("@she_is_miine", color = Color(0xFFDB2777), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                    Icon(Icons.Default.PlayArrow, null, tint = Color(0xAAFFFFFF), modifier = Modifier.size(14.dp))
+                }
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Facebook Contact Row
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color(0xFFEFF6FF))
+                        .clickable {
+                            try {
+                                uriHandler.openUri("https://facebook.com/she_is_miine")
+                                com.example.util.CopySoundPlayer.playClickSound(context)
+                            } catch (e: Exception) {
+                                Toast.makeText(context, "Facebook: she_is_miine", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                        .padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    DynamicImageOrIcon("facebook", Icons.Default.Share, "Facebook", modifier = Modifier.size(24.dp), tint = Color(0xFF2563EB))
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Facebook Page", color = (if (LocalIsDarkMode.current) Color(0xCCFFFFFF) else Color(0xAA000000)), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        Text("she_is_miine", color = Color(0xFF2563EB), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                    Icon(Icons.Default.PlayArrow, null, tint = Color(0xAAFFFFFF), modifier = Modifier.size(14.dp))
+                }
                 Spacer(modifier = Modifier.height(10.dp))
 
                 // YouTube Contact Row
@@ -5977,13 +5626,13 @@ fun DeveloperContactScreenSection(onBack: () -> Unit) {
                         .padding(14.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("▶️", fontSize = 18.sp)
+                    DynamicImageOrIcon("youtube", Icons.Default.PlayArrow, "YouTube", modifier = Modifier.size(24.dp), tint = Color(0xFFDC2626))
                     Spacer(modifier = Modifier.width(12.dp))
                     Column(modifier = Modifier.weight(1f)) {
-                        Text("YouTube Channel", color = Color(0xFF64748B), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        Text("YouTube Channel", color = (if (LocalIsDarkMode.current) Color(0xCCFFFFFF) else Color(0xAA000000)), fontSize = 10.sp, fontWeight = FontWeight.Bold)
                         Text("@destroyer_xe", color = Color(0xFFDC2626), fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
-                    Icon(Icons.Default.PlayArrow, null, tint = Color(0xFF94A3B8), modifier = Modifier.size(14.dp))
+                    Icon(Icons.Default.PlayArrow, null, tint = Color(0xAAFFFFFF), modifier = Modifier.size(14.dp))
                 }
             }
         }
@@ -5991,7 +5640,7 @@ fun DeveloperContactScreenSection(onBack: () -> Unit) {
 }
 
 @Composable
-fun KeypadButton(
+fun KeypadButton( 
     digit: String,
     modifier: Modifier,
     onClick: () -> Unit
@@ -6002,10 +5651,244 @@ fun KeypadButton(
     ) {
         Text(
             text = digit,
-            color = Color.White,
+            color = if (LocalIsDarkMode.current) Color.White else Color.Black,
             fontSize = 24.sp,
             fontWeight = FontWeight.SemiBold
         )
     }
 }
 
+@Composable
+fun DynamicImageOrIcon(
+    imageName: String,
+    fallbackIcon: androidx.compose.ui.graphics.vector.ImageVector,
+    contentDescription: String?,
+    modifier: Modifier = Modifier,
+    tint: Color = Color.Unspecified
+) {
+    val context = LocalContext.current
+    val resId = remember(imageName) {
+        context.resources.getIdentifier(imageName, "drawable", context.packageName)
+    }
+    if (resId != 0) {
+        androidx.compose.foundation.Image(
+            painter = androidx.compose.ui.res.painterResource(id = resId),
+            contentDescription = contentDescription,
+            modifier = modifier
+        )
+    } else {
+        Icon(
+            imageVector = fallbackIcon,
+            contentDescription = contentDescription,
+            modifier = modifier,
+            tint = tint
+        )
+    }
+}
+
+
+@Composable
+fun TrashScreenSection(
+    onBack: () -> Unit,
+    trashNotes: List<com.example.data.NoteEntity>,
+    viewModel: NotepadViewModel
+) {
+    var selectedNotes by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(setOf<Int>()) }
+    val isAllSelected = selectedNotes.size == trashNotes.size && trashNotes.isNotEmpty()
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .statusBarsPadding()
+            .padding(16.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onBack) {
+                    Icon(Icons.Default.ArrowBack, "Back", tint = if (LocalIsDarkMode.current) Color.White else Color.Black)
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Trash Bin (15 Days)", color = if (LocalIsDarkMode.current) Color.White else Color.Black, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            }
+            if (trashNotes.isNotEmpty()) {
+                TextButton(onClick = { 
+                    if (isAllSelected) {
+                        selectedNotes = emptySet()
+                    } else {
+                        selectedNotes = trashNotes.map { it.id }.toSet()
+                    }
+                }) {
+                    Text(if (isAllSelected) "Deselect All" else "Select All")
+                }
+            }
+        }
+        
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        if (trashNotes.isEmpty()) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text("Trash is empty", color = Color.Gray)
+            }
+        } else {
+            if (selectedNotes.isNotEmpty()) {
+                Row(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
+                    Button(onClick = {
+                        scope.launch {
+                            selectedNotes.forEach { viewModel.restoreFromTrash(it) }
+                            selectedNotes = emptySet()
+                        }
+                    }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981))) {
+                        Text("Restore Selected")
+                    }
+                    Button(onClick = {
+                        scope.launch {
+                            selectedNotes.forEach { id -> 
+                                trashNotes.find { it.id == id }?.let { viewModel.deleteNotePermanently(it) }
+                            }
+                            selectedNotes = emptySet()
+                        }
+                    }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEF4444))) {
+                        Text("Delete Permanently")
+                    }
+                }
+            }
+            
+            LazyColumn(modifier = Modifier.weight(1f)) {
+                items(trashNotes) { note ->
+                    val isSelected = selectedNotes.contains(note.id)
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp)
+                            .clickable {
+                                if (isSelected) selectedNotes -= note.id
+                                else selectedNotes += note.id
+                            },
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (isSelected) Color(0x332563EB) else Color(0x1AFFFFFF)
+                        ),
+                        border = BorderStroke(1.dp, if (isSelected) Color(0xFF2563EB) else Color(0x26FFFFFF))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            androidx.compose.material3.Checkbox(
+                                checked = isSelected,
+                                onCheckedChange = { 
+                                    if (it) selectedNotes += note.id
+                                    else selectedNotes -= note.id
+                                }
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Column {
+                                Text(note.title.ifEmpty { "Untitled" }, fontWeight = FontWeight.Bold, color = if (LocalIsDarkMode.current) Color.White else Color.Black)
+                                Text(note.content, maxLines = 1, color = Color.Gray, fontSize = 12.sp)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun FileEditorScreenSection(
+    filePath: String,
+    onBack: () -> Unit,
+    viewModel: NotepadViewModel
+) {
+    val context = LocalContext.current
+    val file = java.io.File(filePath)
+    
+    // Ensure we can read it
+    var fileContent by remember(filePath) { 
+        mutableStateOf(if (file.exists() && file.canRead()) file.readText() else "")
+    }
+
+    val isDark = LocalIsDarkMode.current
+    val bgColor = if (isDark) Color(0xFF0F172A) else Color(0xFFF8FAFC)
+    val textColor = if (isDark) Color.White else Color(0xFF1E293B)
+    val cardBg = if (isDark) Color(0xFF1E293B) else Color.White
+    val borderColor = if (isDark) Color(0xFF334155) else Color(0xFFE2E8F0)
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(bgColor)
+            .statusBarsPadding()
+            .padding(16.dp)
+    ) {
+        // Header
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onBack) {
+                    Icon(Icons.Default.ArrowBack, "Back", tint = textColor)
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                Column {
+                    Text(file.name, color = textColor, fontSize = 18.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(file.parent ?: "", color = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B), fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
+            
+            // Save Button
+            Card(
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF2563EB)),
+                modifier = Modifier.clickable {
+                    try {
+                        file.writeText(fileContent)
+                        android.widget.Toast.makeText(context, "Saved Successfully!", android.widget.Toast.LENGTH_SHORT).show()
+                    } catch (e: Exception) {
+                        android.widget.Toast.makeText(context, "Failed to save: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                }
+            ) {
+                Text(
+                    "SAVE",
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 12.sp,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Glassy Editor
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
+            shape = RoundedCornerShape(32.dp),
+            colors = CardDefaults.cardColors(containerColor = cardBg),
+            border = BorderStroke(1.dp, borderColor)
+        ) {
+            OutlinedTextField(
+                value = fileContent,
+                onValueChange = { fileContent = it },
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
+                textStyle = androidx.compose.ui.text.TextStyle(color = textColor, fontSize = 16.sp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = Color.Transparent,
+                    unfocusedBorderColor = Color.Transparent,
+                    cursorColor = Color(0xFF2563EB)
+                )
+            )
+        }
+    }
+}

@@ -20,6 +20,7 @@ data class NoteEntity(
     val isFavorite: Boolean = false,
     val isLocked: Boolean = false,
     val isDeleted: Boolean = false,
+    val deletedAt: Long? = null,
     val type: String = "NORMAL", // "API", "CODE", "VIDEO", "NORMAL"
     val themeBgHex: String = "#1C1C1E", // Default glassy dark
     val themeType: String = "GLASS_DARK", // "GLASS_DARK", "NEON_BLUE", "SUNSET", "MINT_GLASS", "CHERRY"
@@ -60,8 +61,8 @@ interface NoteDao {
     @Delete
     suspend fun deleteNote(note: NoteEntity)
 
-    @Query("UPDATE notes SET isDeleted = 1 WHERE id = :id")
-    suspend fun moveToTrash(id: Int)
+    @Query("UPDATE notes SET isDeleted = 1, deletedAt = :time WHERE id = :id")
+    suspend fun moveToTrash(id: Int, time: Long)
 
     @Query("UPDATE notes SET isDeleted = 0 WHERE id = :id")
     suspend fun restoreFromTrash(id: Int)
@@ -69,6 +70,9 @@ interface NoteDao {
     @Query("DELETE FROM notes WHERE isDeleted = 1")
     suspend fun emptyTrash()
 
+        @Query("DELETE FROM notes WHERE isDeleted = 1 AND deletedAt IS NOT NULL AND deletedAt < :thresholdTime")
+    suspend fun deleteOldTrashNotes(thresholdTime: Long)
+    
     // --- Folders ---
     @Query("SELECT * FROM folders ORDER BY id ASC")
     fun getAllFolders(): Flow<List<FolderEntity>>
@@ -80,7 +84,7 @@ interface NoteDao {
     suspend fun deleteFolder(folderId: Int)
 }
 
-@Database(entities = [NoteEntity::class, FolderEntity::class], version = 1, exportSchema = false)
+@Database(entities = [NoteEntity::class, FolderEntity::class], version = 2, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun noteDao(): NoteDao
 }

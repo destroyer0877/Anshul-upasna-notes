@@ -27,11 +27,12 @@ class NoteRepository(private val noteDao: NoteDao) {
 
     suspend fun deleteNote(note: NoteEntity) = noteDao.deleteNote(note)
 
-    suspend fun moveToTrash(id: Int) = noteDao.moveToTrash(id)
+    suspend fun moveToTrash(id: Int) = noteDao.moveToTrash(id, System.currentTimeMillis())
 
     suspend fun restoreFromTrash(id: Int) = noteDao.restoreFromTrash(id)
 
     suspend fun emptyTrash() = noteDao.emptyTrash()
+    suspend fun deleteOldTrashNotes(thresholdTime: Long) = noteDao.deleteOldTrashNotes(thresholdTime)
 
     // --- Folders ---
     suspend fun saveFolder(folder: FolderEntity): Long = noteDao.insertFolder(folder)
